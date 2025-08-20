@@ -1,0 +1,3 @@
+URL: https://sroduvvvsdddrjosjmcy.supabase.co
+Public (anon) key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyb2R1dnZ2c2RkZHJqb3NqbWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NzM4MzMsImV4cCI6MjA3MTI0OTgzM30.jpsVXBxULIVo_1mDVYugccct5FFyrIevUlYwb1zSO6Y
+Project Ref: sroduvvvsdddrjosjmcy

@@ -1,0 +1,12 @@
+names:
+- Detect-rust-on-metal-surfaces
+nc: 1
+roboflow:
+  license: CC BY 4.0
+  project: corrosion-detection-xjdlv
+  url: https://universe.roboflow.com/hamka-corrosion/corrosion-detection-xjdlv/dataset/1
+  version: 1
+  workspace: hamka-corrosion
+test: ../test/images
+train: ../train/images
+val: ../valid/images
