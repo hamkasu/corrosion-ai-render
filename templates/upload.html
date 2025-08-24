@@ -1,12 +1,105 @@
+<!-- templates/upload.html -->
 <!DOCTYPE html>
 <html>
-<head><title>Corrosion Detector</title></head>
-<body style="text-align:center; margin:50px;">
-  <h1>📸 Upload Metal Image</h1>
-  <form method="POST" enctype="multipart/form-data" action="/upload">
-    <input type="file" name="file" accept="image/*" required>
+<head>
+  <title>📸 Corrosion Detector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 20px;
+    }
+    h1 { color: #2c3e50; }
+    .btn {
+      padding: 12px 24px;
+      font-size: 16px;
+      margin: 10px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn:hover { background-color: #2980b9; }
+    video, img { max-width: 100%; max-height: 400px; margin: 10px 0; }
+    #result { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>📸 Corrosion Detector</h1>
+
+  <!-- Camera View -->
+  <div id="camera">
+    <video id="video" autoplay playsinline></video>
+    <br>
+    <button id="capture" class="btn">📷 Take Photo</button>
+  </div>
+
+  <!-- Photo Preview -->
+  <div id="preview" style="display:none;">
+    <h3>Your Photo</h3>
+    <img id="photo" src="" alt="Captured photo">
     <br><br>
-    <button type="submit">Analyze for Corrosion</button>
-  </form>
+    <button onclick="submitPhoto()" class="btn">✅ Analyze Corrosion</button>
+    <button onclick="resetCamera()" class="btn" style="background-color: #95a5a6;">🔄 Retake</button>
+  </div>
+
+  <!-- Result -->
+  <div id="result"></div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.createElement('canvas');
+    const photo = document.getElementById('photo');
+    const camera = document.getElementById('camera');
+    const preview = document.getElementById('preview');
+    const result = document.getElementById('result');
+
+    // Access camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        result.innerHTML = `<p style="color:red;">Camera access denied: ${err.message}</p>`;
+      });
+
+    // Capture photo
+    document.getElementById('capture').addEventListener('click', () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      photo.src = canvas.toDataURL('image/jpeg');
+      camera.style.display = 'none';
+      preview.style.display = 'block';
+    });
+
+    // Submit photo to server
+    function submitPhoto() {
+      fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: photo.src })
+      })
+      .then(res => res.json())
+      .then(data => {
+        let severity = data.severity || "No corrosion detected";
+        let img = `<img src="${data.result_image}" width="100%">`;
+        result.innerHTML = `<h3>Result:</h3><p>${severity}</p>${img}<br>
+          <a href="/" class="btn">🏠 Home</a>
+          <a href="/reports" class="btn">📋 Reports</a>`;
+      })
+      .catch(err => {
+        result.innerHTML += `<p style="color:red;">❌ Error: ${err.message}</p>`;
+      });
+    }
+
+    // Retake photo
+    function resetCamera() {
+      preview.style.display = 'none';
+      camera.style.display = 'block';
+    }
+  </script>
 </body>
 </html>

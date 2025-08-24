@@ -1,0 +1,12 @@
+names:
+- segmentation
+nc: 1
+roboflow:
+  license: CC BY 4.0
+  project: corrosion-segmentation-rlb4u
+  url: https://universe.roboflow.com/hamka-corrosion/corrosion-segmentation-rlb4u/dataset/1
+  version: 1
+  workspace: hamka-corrosion
+test: ../test/images
+train: ../train/images
+val: ../valid/images

@@ -1,0 +1,6 @@
+{
+  "build": {
+    "builder": "docker"
+  },
+  "run": "python app.py"
+}

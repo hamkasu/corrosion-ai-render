@@ -1,10 +1,39 @@
 <!DOCTYPE html>
 <html>
-<head><title>Result</title></head>
-<body style="text-align:center; margin:50px;">
-  <h1>🔍 Detection Result</h1>
-  <img src="{{ image_url }}" style="max-width:600px; border:3px solid #ddd;">
-  <h2>{{ result }}</h2>
+<head>
+  <title>Result</title>
+  <style>
+    body { font-family: Arial; margin: 40px; text-align: center; }
+    h1 { color: #2c3e50; }
+    .images {
+      display: flex; justify-content: center; gap: 30px; margin: 30px 0; flex-wrap: wrap; }
+    .img-box {
+      text-align: center; border: 3px solid #ddd; padding: 10px; border-radius: 8px; }
+    .img-box img { max-width: 400px; max-height: 400px; object-fit: contain; }
+    .result-text {
+      font-size: 20px; margin: 20px 0; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Corrosion Detection Result</h1>
+
+  <div class="images">
+    <div class="img-box">
+      <h3>Uploaded Image</h3>
+      <img src="{{ url_for('static', filename='uploads/' + original_filename) }}" alt="Original">
+    </div>
+    <div class="img-box">
+      <h3>AI Detection</h3>
+      <img src="{{ url_for('static', filename='results/' + result_filename) }}" alt="Detected">
+    </div>
+  </div>
+
+  <div class="result-text">
+    {{ result | safe }}
+  </div>
+
   <a href="/">← Upload Another</a>
 </body>
 </html>

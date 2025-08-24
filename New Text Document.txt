@@ -1,3 +1,30 @@
-URL: https://sroduvvvsdddrjosjmcy.supabase.co
-Public (anon) key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyb2R1dnZ2c2RkZHJqb3NqbWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NzM4MzMsImV4cCI6MjA3MTI0OTgzM30.jpsVXBxULIVo_1mDVYugccct5FFyrIevUlYwb1zSO6Y
-Project Ref: sroduvvvsdddrjosjmcy
+# prepare_retraining.py
+from database import get_all_detections
+import os
+import shutil
+
+# Get confirmed images
+detections = get_all_detections()
+confirmed = [d for d in detections if d['confirmed']]
+
+print(f"Found {len(confirmed)} confirmed images for retraining")
+
+# Copy to a retraining folder
+retrain_dir = "retrain_dataset"
+os.makedirs(f"{retrain_dir}/images", exist_ok=True)
+os.makedirs(f"{retrain_dir}/labels", exist_ok=True)
+
+for det in confirmed:
+    # Copy original image
+    src_img = os.path.join('static/uploads', det['original_image'])
+    dst_img = os.path.join(retrain_dir, 'images', det['original_image'])
+    if os.path.exists(src_img):
+        shutil.copy(src_img, dst_img)
+
+    # Optional: Generate label file (requires Roboflow SDK or manual annotation)
+    # For now, this is a placeholder
+    label_path = os.path.join(retrain_dir, 'labels', det['original_image'].rsplit('.', 1)[0] + '.txt')
+    with open(label_path, 'w') as f:
+        f.write("# Label to be generated via Roboflow or manual annotation\n")
+
+print("✅ Dataset ready for retraining in:", retrain_dir)
