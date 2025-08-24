@@ -1,7 +1,9 @@
-flask==3.0.3
-flask-login==0.6.3
-ultralytics==8.3.29
-fpdf2==2.7.4
+ultralytics==8.3.28
+Flask==3.0.3
+Flask-Login==0.6.3
 opencv-python==4.10.0.84
 pillow==10.4.0
-pytz==2024.1
+numpy==1.26.4
+fpdf==1.7.2
+pytz==2024.2
+psycopg2-binary==2.9.9
