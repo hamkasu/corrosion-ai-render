@@ -665,10 +665,22 @@ def upload_file():
                 .card {{ border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); overflow: hidden; }}
                 .img-container {{ background: #f8f9fa; padding: 10px; border-radius: 10px; text-align: center; position: relative; display: inline-block; }}
                 .img-container img {{ max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+<<<<<<< HEAD
                 #markupCanvas {{ position: absolute; top: 10px; left: 10px; cursor: crosshair; }}
                 .btn {{ border-radius: 50px; padding: 10px 20px; font-weight: 600; }}
                 .comment-box {{ border: 2px solid #dee2e6; border-radius: 10px; padding: 15px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
                 .tool-btn {{ width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0 5px; }}
+=======
+                #markupCanvas {{ position: absolute; top: 10px; left: 10px; cursor: crosshair; z-index: 10; }}
+                .btn {{ border-radius: 50px; padding: 10px 20px; font-weight: 600; }}
+                .comment-box {{ border: 2px solid #dee2e6; border-radius: 10px; padding: 15px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
+                .tool-btn {{ width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0 5px; }}
+                #saveToast {{
+                    position: fixed; top: 20px; right: 20px; background: #28a745; color: white;
+                    padding: 10px 20px; border-radius: 5px; z-index: 1000;
+                    display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                }}
+>>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
             </style>
         </head>
         <body>
@@ -708,7 +720,9 @@ def upload_file():
                                     </div>
                                 </div>
 
+                                <!-- Combined Save Box -->
                                 <div class="comment-box mb-4">
+<<<<<<< HEAD
                                     <form method="POST" action="/rename_report/{result_filename}" class="w-100">
                                         <label for="custom_name" class="form-label"><strong>📋 Rename This Report</strong></label>
                                         <input type="text" name="custom_name" id="custom_name" class="form-control mb-3" placeholder="e.g., Pipe_Joint_Inspection_Aug25" value="{safe_custom_name}">
@@ -722,6 +736,29 @@ def upload_file():
                                         <textarea name="comment" id="comment" class="form-control mb-3" placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair">{safe_comment}</textarea>
                                         <button type="submit" class="btn btn-primary w-100"><i class="fas fa-save"></i> Save Comment</button>
                                     </form>
+=======
+                                    <h5><i class="fas fa-edit"></i> Report Details</h5>
+                                    <div class="mb-3">
+                                        <label for="custom_name" class="form-label"><strong>Report Name</strong></label>
+                                        <input type="text" 
+                                               name="custom_name" 
+                                               id="custom_name" 
+                                               class="form-control"
+                                               placeholder="e.g., Pipe_Joint_Inspection_Aug25"
+                                               value="{safe_custom_name}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="comment" class="form-label"><strong>Comments & Observations</strong></label>
+                                        <textarea name="comment" 
+                                                  id="comment" 
+                                                  class="form-control"
+                                                  rows="3"
+                                                  placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair">{safe_comment}</textarea>
+                                    </div>
+                                    <button onclick="saveDetails('{result_filename}')" class="btn btn-success w-100">
+                                        <i class="fas fa-save"></i> Save All
+                                    </button>
+>>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
                                 </div>
 
                                 <div class="mt-4 p-3 bg-light rounded">
@@ -742,7 +779,37 @@ def upload_file():
                 </div>
             </div>
 
+            <!-- Success Toast -->
+            <div id="saveToast">Saved successfully!</div>
+
             <script>
+                function showSuccess() {{
+                    const toast = document.getElementById('saveToast');
+                    toast.style.display = 'block';
+                    setTimeout(() => toast.style.display = 'none', 3000);
+                }}
+
+                async function saveDetails(resultFilename) {{
+                    const name = document.getElementById('custom_name').value;
+                    const comment = document.getElementById('comment').value;
+
+                    const res = await fetch('/save_details', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{
+                            result_image: resultFilename,
+                            custom_name: name,
+                            comment: comment
+                        }})
+                    }});
+
+                    if (res.ok) {{
+                        showSuccess();
+                    }} else {{
+                        alert('❌ Save failed');
+                    }}
+                }}
+
                 let canvas, ctx;
                 let isDrawing = false;
                 let drawMode = 'pen';
@@ -753,20 +820,19 @@ def upload_file():
                     const container = document.getElementById('detectedContainer');
                     canvas = document.getElementById('markupCanvas');
                     ctx = canvas.getContext('2d');
+
                     canvas.width = img.naturalWidth;
                     canvas.height = img.naturalHeight;
 
                     const displayWidth = img.clientWidth;
                     const displayHeight = img.clientHeight;
-                    const scale = {{
-                        x: canvas.width / displayWidth,
-                        y: canvas.height / displayHeight
-                    }};
-
                     canvas.style.width = displayWidth + 'px';
                     canvas.style.height = displayHeight + 'px';
 
-                    const saved = localStorage.getItem('markup_' + '{result_filename}');
+                    const scaleX = canvas.width / displayWidth;
+                    const scaleY = canvas.height / displayHeight;
+
+                    const saved = localStorage.getItem('markup_' + resultFilename);
                     if (saved) {{
                         const imgData = new Image();
                         imgData.onload = function() {{
@@ -778,8 +844,8 @@ def upload_file():
                     function getMousePos(e) {{
                         const rect = canvas.getBoundingClientRect();
                         return {{
-                            x: (e.clientX - rect.left) * scale.x,
-                            y: (e.clientY - rect.top) * scale.y
+                            x: (e.clientX - rect.left) * scaleX,
+                            y: (e.clientY - rect.top) * scaleY
                         }};
                     }}
 
@@ -816,8 +882,17 @@ def upload_file():
                     fetch('/save_markup', {{
                         method: 'POST',
                         headers: {{ 'Content-Type': 'application/json' }},
+<<<<<<< HEAD
                         body: JSON.stringify({{ image_name: resultFilename, markup_data: dataUrl }})
                     }}).then(res => res.json()).then(data => {{
+=======
+                        body: JSON.stringify({{ 
+                            image_name: resultFilename, 
+                            markup_data: dataUrl 
+                        }})
+                    }}).then(res => res.json())
+                      .then(data => {{
+>>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
                         alert(data.success ? '✅ Markup saved!' : '❌ Save failed');
                     }});
                 }}
@@ -1317,6 +1392,32 @@ def rename_report(result_filename):
     </div>
     '''
 
+<<<<<<< HEAD
+=======
+@app.route('/save_details', methods=['POST'])
+def save_details():
+    try:
+        data = request.get_json()
+        result_image = data.get('result_image', '')
+        custom_name = data.get('custom_name', '').strip()
+        comment = data.get('comment', '').strip()
+
+        conn = sqlite3.connect('corrosion.db')
+        c = conn.cursor()
+        c.execute('''
+            UPDATE detections 
+            SET custom_name = ?, comments = ?
+            WHERE result_image = ?
+        ''', (custom_name, comment, result_image))
+        conn.commit()
+        conn.close()
+
+        return {"success": True}
+    except Exception as e:
+        print("❌ Save details failed:", str(e))
+        return {"success": False}, 500
+
+>>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
 @app.route('/save_markup', methods=['POST'])
 def save_markup():
     try:
