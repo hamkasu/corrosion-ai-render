@@ -665,22 +665,10 @@ def upload_file():
                 .card {{ border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); overflow: hidden; }}
                 .img-container {{ background: #f8f9fa; padding: 10px; border-radius: 10px; text-align: center; position: relative; display: inline-block; }}
                 .img-container img {{ max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
-<<<<<<< HEAD
                 #markupCanvas {{ position: absolute; top: 10px; left: 10px; cursor: crosshair; }}
                 .btn {{ border-radius: 50px; padding: 10px 20px; font-weight: 600; }}
                 .comment-box {{ border: 2px solid #dee2e6; border-radius: 10px; padding: 15px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
                 .tool-btn {{ width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0 5px; }}
-=======
-                #markupCanvas {{ position: absolute; top: 10px; left: 10px; cursor: crosshair; z-index: 10; }}
-                .btn {{ border-radius: 50px; padding: 10px 20px; font-weight: 600; }}
-                .comment-box {{ border: 2px solid #dee2e6; border-radius: 10px; padding: 15px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
-                .tool-btn {{ width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0 5px; }}
-                #saveToast {{
-                    position: fixed; top: 20px; right: 20px; background: #28a745; color: white;
-                    padding: 10px 20px; border-radius: 5px; z-index: 1000;
-                    display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-                }}
->>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
             </style>
         </head>
         <body>
@@ -720,45 +708,18 @@ def upload_file():
                                     </div>
                                 </div>
 
-                                <!-- Combined Save Box -->
                                 <div class="comment-box mb-4">
-<<<<<<< HEAD
-                                    <form method="POST" action="/rename_report/{result_filename}" class="w-100">
-                                        <label for="custom_name" class="form-label"><strong>📋 Rename This Report</strong></label>
-                                        <input type="text" name="custom_name" id="custom_name" class="form-control mb-3" placeholder="e.g., Pipe_Joint_Inspection_Aug25" value="{safe_custom_name}">
-                                        <button type="submit" class="btn btn-primary w-100"><i class="fas fa-edit"></i> Save Report Name</button>
-                                    </form>
+                                    <label for="custom_name" class="form-label"><strong>📋 Report Name</strong></label>
+                                    <input type="text" id="custom_name" class="form-control mb-2" placeholder="e.g., Pipe_Joint_Inspection_Aug25" value="{safe_custom_name}">
+                                    <button onclick="saveCustomName('{result_filename}')" class="btn btn-primary w-100"><i class="fas fa-edit"></i> Save Name</button>
+                                    <div id="nameStatus" class="mt-2 text-center"></div>
                                 </div>
 
                                 <div class="comment-box mb-4">
-                                    <form method="POST" action="/save_comment/{result_filename}" class="w-100">
-                                        <label for="comment" class="form-label"><strong>Comments & Observations</strong></label>
-                                        <textarea name="comment" id="comment" class="form-control mb-3" placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair">{safe_comment}</textarea>
-                                        <button type="submit" class="btn btn-primary w-100"><i class="fas fa-save"></i> Save Comment</button>
-                                    </form>
-=======
-                                    <h5><i class="fas fa-edit"></i> Report Details</h5>
-                                    <div class="mb-3">
-                                        <label for="custom_name" class="form-label"><strong>Report Name</strong></label>
-                                        <input type="text" 
-                                               name="custom_name" 
-                                               id="custom_name" 
-                                               class="form-control"
-                                               placeholder="e.g., Pipe_Joint_Inspection_Aug25"
-                                               value="{safe_custom_name}">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="comment" class="form-label"><strong>Comments & Observations</strong></label>
-                                        <textarea name="comment" 
-                                                  id="comment" 
-                                                  class="form-control"
-                                                  rows="3"
-                                                  placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair">{safe_comment}</textarea>
-                                    </div>
-                                    <button onclick="saveDetails('{result_filename}')" class="btn btn-success w-100">
-                                        <i class="fas fa-save"></i> Save All
-                                    </button>
->>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
+                                    <label for="comment" class="form-label"><strong>💬 Comments & Observations</strong></label>
+                                    <textarea id="comment" class="form-control mb-2" placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair" rows="3">{safe_comment}</textarea>
+                                    <button onclick="saveComment('{result_filename}')" class="btn btn-success w-100"><i class="fas fa-save"></i> Save Comment</button>
+                                    <div id="commentStatus" class="mt-2 text-center"></div>
                                 </div>
 
                                 <div class="mt-4 p-3 bg-light rounded">
@@ -770,8 +731,8 @@ def upload_file():
                                 </div>
 
                                 <div class="mt-4">
-                                    <a href="/" class="btn btn-outline-primary me-2">Upload Another</a>
-                                    <a href="/reports" class="btn btn-primary">View All Reports</a>
+                                    <a href="/" class="btn btn-outline-dark me-2">🏠 Home</a>
+                                    <a href="/reports" class="btn btn-secondary">❌ Close</a>
                                 </div>
                             </div>
                         </div>
@@ -779,37 +740,7 @@ def upload_file():
                 </div>
             </div>
 
-            <!-- Success Toast -->
-            <div id="saveToast">Saved successfully!</div>
-
             <script>
-                function showSuccess() {{
-                    const toast = document.getElementById('saveToast');
-                    toast.style.display = 'block';
-                    setTimeout(() => toast.style.display = 'none', 3000);
-                }}
-
-                async function saveDetails(resultFilename) {{
-                    const name = document.getElementById('custom_name').value;
-                    const comment = document.getElementById('comment').value;
-
-                    const res = await fetch('/save_details', {{
-                        method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{
-                            result_image: resultFilename,
-                            custom_name: name,
-                            comment: comment
-                        }})
-                    }});
-
-                    if (res.ok) {{
-                        showSuccess();
-                    }} else {{
-                        alert('❌ Save failed');
-                    }}
-                }}
-
                 let canvas, ctx;
                 let isDrawing = false;
                 let drawMode = 'pen';
@@ -820,19 +751,20 @@ def upload_file():
                     const container = document.getElementById('detectedContainer');
                     canvas = document.getElementById('markupCanvas');
                     ctx = canvas.getContext('2d');
-
                     canvas.width = img.naturalWidth;
                     canvas.height = img.naturalHeight;
 
                     const displayWidth = img.clientWidth;
                     const displayHeight = img.clientHeight;
+                    const scale = {{
+                        x: canvas.width / displayWidth,
+                        y: canvas.height / displayHeight
+                    }};
+
                     canvas.style.width = displayWidth + 'px';
                     canvas.style.height = displayHeight + 'px';
 
-                    const scaleX = canvas.width / displayWidth;
-                    const scaleY = canvas.height / displayHeight;
-
-                    const saved = localStorage.getItem('markup_' + resultFilename);
+                    const saved = localStorage.getItem('markup_' + '{result_filename}');
                     if (saved) {{
                         const imgData = new Image();
                         imgData.onload = function() {{
@@ -844,8 +776,8 @@ def upload_file():
                     function getMousePos(e) {{
                         const rect = canvas.getBoundingClientRect();
                         return {{
-                            x: (e.clientX - rect.left) * scaleX,
-                            y: (e.clientY - rect.top) * scaleY
+                            x: (e.clientX - rect.left) * scale.x,
+                            y: (e.clientY - rect.top) * scale.y
                         }};
                     }}
 
@@ -882,18 +814,53 @@ def upload_file():
                     fetch('/save_markup', {{
                         method: 'POST',
                         headers: {{ 'Content-Type': 'application/json' }},
-<<<<<<< HEAD
                         body: JSON.stringify({{ image_name: resultFilename, markup_data: dataUrl }})
                     }}).then(res => res.json()).then(data => {{
-=======
-                        body: JSON.stringify({{ 
-                            image_name: resultFilename, 
-                            markup_data: dataUrl 
-                        }})
-                    }}).then(res => res.json())
-                      .then(data => {{
->>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
                         alert(data.success ? '✅ Markup saved!' : '❌ Save failed');
+                    }});
+                }}
+
+                function saveCustomName(resultFilename) {{
+                    const input = document.getElementById('custom_name');
+                    const status = document.getElementById('nameStatus');
+                    const value = input.value.trim();
+
+                    status.innerHTML = '<span class="text-warning">Saving...</span>';
+
+                    fetch('/rename_report', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ result_image: resultFilename, custom_name: value }})
+                    }}).then(res => res.json()).then(data => {{
+                        if (data.success) {{
+                            status.innerHTML = '<span class="text-success">✅ Name saved!</span>';
+                        }} else {{
+                            status.innerHTML = '<span class="text-danger">❌ Save failed</span>';
+                        }}
+                    }}).catch(err => {{
+                        status.innerHTML = '<span class="text-danger">❌ Network error</span>';
+                    }});
+                }}
+
+                function saveComment(resultFilename) {{
+                    const input = document.getElementById('comment');
+                    const status = document.getElementById('commentStatus');
+                    const value = input.value.trim();
+
+                    status.innerHTML = '<span class="text-warning">Saving...</span>';
+
+                    fetch('/save_comment', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ result_image: resultFilename, comment: value }})
+                    }}).then(res => res.json()).then(data => {{
+                        if (data.success) {{
+                            status.innerHTML = '<span class="text-success">✅ Comment saved!</span>';
+                        }} else {{
+                            status.innerHTML = '<span class="text-danger">❌ Save failed</span>';
+                        }}
+                    }}).catch(err => {{
+                        status.innerHTML = '<span class="text-danger">❌ Network error</span>';
                     }});
                 }}
             </script>
@@ -1306,7 +1273,7 @@ def download_pdf(detection_id):
         pdf_filename = f"report_{detection_id}.pdf"
         pdf_path = os.path.join('static/reports', pdf_filename)
 
-        create_pdf_report(orig_path, result_path, row['result_text'], pdf_path, row['original_image'], row['comments'])
+        create_pdf_report(orig_path, result_path, row['result_text'], pdf_path, row['original_image'], row['comments'], row['custom_name'])
         
         return f'''
         <!DOCTYPE html>
@@ -1337,87 +1304,40 @@ def download_pdf(detection_id):
         </div>
         '''
 
-@app.route('/save_comment/<result_filename>', methods=['POST'])
-def save_comment(result_filename):
-    comment = request.form.get('comment', '').strip()
-    try:
-        conn = sqlite3.connect('corrosion.db')
-        c = conn.cursor()
-        c.execute("UPDATE detections SET comments = ? WHERE result_image = ?", (comment, result_filename))
-        conn.commit()
-        conn.close()
-        message = "✅ Comment saved successfully!"
-        alert_class = "success"
-    except Exception as e:
-        message = f"❌ Error saving comment: {str(e)}"
-        alert_class = "danger"
-
-    return f'''
-    <div class="container py-4">
-        <a href="/" class="btn btn-outline-primary btn-sm mb-3">Home</a>
-        <div class="alert alert-{alert_class} text-center"><h4>{message}</h4></div>
-        <div class="text-center mt-4">
-            <a href="/reports" class="btn btn-primary me-2">Reports</a>
-            <a href="/" class="btn btn-outline-dark">Home</a>
-        </div>
-    </div>
-    '''
-
-@app.route('/rename_report/<result_filename>', methods=['POST'])
-def rename_report(result_filename):
-    custom_name = request.form.get('custom_name', '').strip()
-    if not custom_name:
-        custom_name = ''
+@app.route('/save_comment', methods=['POST'])
+def save_comment():
+    data = request.get_json()
+    result_image = data.get('result_image')
+    comment = data.get('comment', '').strip()
 
     try:
         conn = sqlite3.connect('corrosion.db')
         c = conn.cursor()
-        c.execute("UPDATE detections SET custom_name = ? WHERE result_image = ?", (custom_name, result_filename))
+        c.execute("UPDATE detections SET comments = ? WHERE result_image = ?", (comment, result_image))
         conn.commit()
         conn.close()
-        message = "✅ Report name saved!"
-        alert_class = "success"
-    except Exception as e:
-        message = f"❌ Error saving name: {str(e)}"
-        alert_class = "danger"
-
-    return f'''
-    <div class="container py-4">
-        <a href="/" class="btn btn-outline-primary btn-sm mb-3">Home</a>
-        <div class="alert alert-{alert_class} text-center"><h4>{message}</h4></div>
-        <div class="text-center mt-4">
-            <a href="/reports" class="btn btn-primary me-2">Reports</a>
-            <a href="/" class="btn btn-outline-dark">Home</a>
-        </div>
-    </div>
-    '''
-
-<<<<<<< HEAD
-=======
-@app.route('/save_details', methods=['POST'])
-def save_details():
-    try:
-        data = request.get_json()
-        result_image = data.get('result_image', '')
-        custom_name = data.get('custom_name', '').strip()
-        comment = data.get('comment', '').strip()
-
-        conn = sqlite3.connect('corrosion.db')
-        c = conn.cursor()
-        c.execute('''
-            UPDATE detections 
-            SET custom_name = ?, comments = ?
-            WHERE result_image = ?
-        ''', (custom_name, comment, result_image))
-        conn.commit()
-        conn.close()
-
         return {"success": True}
     except Exception as e:
-        print("❌ Save details failed:", str(e))
-        return {"success": False}, 500
+        print("❌ Comment save failed:", str(e))
+        return {"success": False, "error": str(e)}, 500
 
->>>>>>> 5516ec0fd0910366283c38e55cb64a818362b829
+@app.route('/rename_report', methods=['POST'])
+def rename_report():
+    data = request.get_json()
+    result_image = data.get('result_image')
+    custom_name = data.get('custom_name', '').strip()
+
+    try:
+        conn = sqlite3.connect('corrosion.db')
+        c = conn.cursor()
+        c.execute("UPDATE detections SET custom_name = ? WHERE result_image = ?", (custom_name, result_image))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        print("❌ Rename failed:", str(e))
+        return {"success": False, "error": str(e)}, 500
+
 @app.route('/save_markup', methods=['POST'])
 def save_markup():
     try:
@@ -1432,12 +1352,6 @@ def save_markup():
 
         with open(markup_path, 'wb') as f:
             f.write(image_data)
-
-        conn = sqlite3.connect('corrosion.db')
-        c = conn.cursor()
-        c.execute("UPDATE detections SET comments = comments || '\n[Markup saved]' WHERE result_image = ?", (image_name,))
-        conn.commit()
-        conn.close()
 
         return {"success": True}
     except Exception as e:
