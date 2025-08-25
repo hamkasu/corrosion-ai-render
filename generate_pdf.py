@@ -1,10 +1,16 @@
 # generate_pdf.py
+
 from fpdf import FPDF
 from PIL import Image
 import os
 
+# Before calling create_pdf_report
+if not os.path.exists(orig_path):
+    print(f"❌ Original image not found: {orig_path}")
+if not os.path.exists(result_path):
+    print(f"❌ Result image not found: {result_path}")
+
 def create_pdf_report(original_image_path, result_image_path, result_text, pdf_path, original_filename, comments=""):
-    # Your PDF generation code here
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -12,6 +18,7 @@ def create_pdf_report(original_image_path, result_image_path, result_text, pdf_p
     pdf.cell(0, 10, "Corrosion Inspection Report", ln=True, align='C')
     pdf.ln(5)
 
+    # Add metadata
     pdf.set_font("Arial", size=12)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 8, f"Image: {original_filename}", ln=True)
@@ -38,18 +45,26 @@ def create_pdf_report(original_image_path, result_image_path, result_text, pdf_p
         pdf.multi_cell(0, 6, comments)
         pdf.ln(5)
 
-    # Add Images
+    # === Image Section ===
     y = pdf.get_y() + 10
-    try:
-        pdf.image(original_image_path, x=10, y=y, w=90)
-        pdf.image(result_image_path, x=105, y=y, w=90)
+    img_width = 90  # PDF width in mm
 
-        pdf.set_y(y + 85)
-        pdf.set_font("Arial", 'I', 10)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(90, 6, "Original Image", align='C')
-        pdf.cell(90, 6, "Detected Corrosion", align='C')
+    try:
+        # ✅ Use file path directly (not URL)
+        pdf.image(original_image_path, x=10, y=y, w=img_width)
     except Exception as e:
-        pdf.cell(0, 10, "Error embedding images.", ln=True)
+        pdf.cell(90, 40, "Original image not found", border=1)
+
+    try:
+        pdf.image(result_image_path, x=105, y=y, w=img_width)
+    except Exception as e:
+        pdf.cell(90, 40, "Detected image not found", border=1)
+
+    # Labels
+    pdf.set_y(y + 85)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(90, 6, "Original Image", align='C')
+    pdf.cell(90, 6, "Detected Corrosion", align='C')
 
     pdf.output(pdf_path)
