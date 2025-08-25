@@ -1431,8 +1431,9 @@ def download_pdf(detection_id):
         pdf_path = os.path.join('static/reports', pdf_filename)
         os.makedirs('static/reports', exist_ok=True)
 
-        create_pdf_report(orig_path, result_path, row['result_text'], pdf_path, row['original_image'], row['comments'], row['custom_name'])
-        
+        #create_pdf_report(orig_path, result_path, row['result_text'], pdf_path, row['original_image'], row['comments'], row['custom_name'])
+        create_pdf_report(orig_path, result_path, row['result_text'], pdf_path, row['original_image'], row['comments'])
+
         return f'''
         <!DOCTYPE html>
         <html lang="en">
