@@ -1,10 +1,10 @@
-# app.py - Final Corrosion Detection AI with Login, PDF, Comments, Markup, Rename, Delete
+# app.py - Corrosion Detection AI Application
 
-from flask import Flask, request, redirect, url_for, send_file, make_response
+from flask import Flask, request, redirect, url_for, send_file, render_template_string
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from ultralytics import YOLO
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import os
 import uuid
 import sqlite3
@@ -16,11 +16,11 @@ import pytz
 from datetime import datetime
 import zipfile
 import io
+import logging
 
-# Ensure directories exist
-os.makedirs('static/uploads', exist_ok=True)
-os.makedirs('static/results', exist_ok=True)
-os.makedirs('static/reports', exist_ok=True)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ===========================
 # Flask App Setup
@@ -29,11 +29,13 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['RESULT_FOLDER'] = 'static/results'
+app.config['REPORT_FOLDER'] = 'static/reports'
 
+# Ensure directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['RESULT_FOLDER'], exist_ok=True)
-os.makedirs(os.path.join(app.config['RESULT_FOLDER'], 'markup'), exist_ok=True)
-os.makedirs('static/temp', exist_ok=True)
+os.makedirs(app.config['RESULT_FOLDER'] + '/markup', exist_ok=True)
+os.makedirs(app.config['REPORT_FOLDER'], exist_ok=True)
 
 # ===========================
 # Configurable Timezone
@@ -73,50 +75,63 @@ def load_user(user_id):
 # Initialize Database
 # ===========================
 def init_db():
-    conn = sqlite3.connect('corrosion.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS detections (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            original_image TEXT NOT NULL,
-            result_image TEXT NOT NULL,
-            result_text TEXT,
-            high_severity INTEGER DEFAULT 0,
-            medium_severity INTEGER DEFAULT 0,
-            low_severity INTEGER DEFAULT 0,
-            confirmed BOOLEAN DEFAULT FALSE,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            comments TEXT DEFAULT '',
-            custom_name TEXT DEFAULT ''
-        )
-    ''')
-    c.execute("PRAGMA table_info(detections)")
-    columns = [col[1] for col in c.fetchall()]
-    if 'timestamp' not in columns:
-        c.execute("ALTER TABLE detections ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP")
-    if 'comments' not in columns:
-        c.execute("ALTER TABLE detections ADD COLUMN comments TEXT DEFAULT ''")
-    if 'custom_name' not in columns:
-        c.execute("ALTER TABLE detections ADD COLUMN custom_name TEXT DEFAULT ''")
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect('corrosion.db')
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS detections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                original_image TEXT NOT NULL,
+                result_image TEXT NOT NULL,
+                result_text TEXT,
+                high_severity INTEGER DEFAULT 0,
+                medium_severity INTEGER DEFAULT 0,
+                low_severity INTEGER DEFAULT 0,
+                confirmed BOOLEAN DEFAULT FALSE,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                comments TEXT DEFAULT '',
+                custom_name TEXT DEFAULT ''
+            )
+        ''')
+        
+        # Check for existing columns and add if needed
+        c.execute("PRAGMA table_info(detections)")
+        columns = [col[1] for col in c.fetchall()]
+        
+        if 'timestamp' not in columns:
+            c.execute("ALTER TABLE detections ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP")
+        if 'comments' not in columns:
+            c.execute("ALTER TABLE detections ADD COLUMN comments TEXT DEFAULT ''")
+        if 'custom_name' not in columns:
+            c.execute("ALTER TABLE detections ADD COLUMN custom_name TEXT DEFAULT ''")
+            
+        conn.commit()
+        conn.close()
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Error initializing database: {str(e)}")
 
 def init_deletion_log():
-    conn = sqlite3.connect('corrosion.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS deletion_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            detection_id INTEGER NOT NULL,
-            original_image TEXT NOT NULL,
-            deleted_by TEXT NOT NULL,
-            deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (detection_id) REFERENCES detections (id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect('corrosion.db')
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS deletion_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                detection_id INTEGER NOT NULL,
+                original_image TEXT NOT NULL,
+                deleted_by TEXT NOT NULL,
+                deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (detection_id) REFERENCES detections (id)
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        logger.info("✅ Deletion log table created")
+    except Exception as e:
+        logger.error(f"❌ Error creating deletion log: {str(e)}")
 
+# Initialize database
 init_db()
 init_deletion_log()
 
@@ -129,8 +144,18 @@ model = None
 try:
     model = YOLO(MODEL_PATH)
     model.to('cpu')
+    logger.info("✅ YOLO model loaded successfully")
 except Exception as e:
-    print("❌ Error loading model:", str(e))
+    logger.error(f"❌ Error loading model: {str(e)}")
+    # Fallback to Roboflow model if local model fails
+    try:
+        from roboflow import Roboflow
+        rf = Roboflow(api_key=os.getenv("ROBOFLOW_API_KEY", "YOUR_API_KEY"))
+        project = rf.workspace("hamka-corrosion").project("corrosion-detection-xjdlv")
+        model = project.version(1).model
+        logger.info("✅ Roboflow model loaded as fallback")
+    except Exception as e:
+        logger.error(f"❌ Error loading Roboflow model: {str(e)}")
 
 # ===========================
 # Prediction Function
@@ -214,7 +239,7 @@ def predict_image(filepath):
         return result_filename, result_text, high, med, low
 
     except Exception as e:
-        print("❌ Prediction error:", str(e))
+        logger.error(f"❌ Prediction error: {str(e)}")
         return "no_detection.jpg", "Error analyzing image", 0, 0, 0
 
 # ===========================
@@ -234,7 +259,8 @@ def get_summary_stats():
         med = sum(r['medium_severity'] for r in rows)
         low = sum(r['low_severity'] for r in rows)
         return {'total': total, 'confirmed': confirmed, 'high': high, 'med': med, 'low': low}
-    except:
+    except Exception as e:
+        logger.error(f"❌ Error getting summary stats: {str(e)}")
         return {'total': 0, 'confirmed': 0, 'high': 0, 'med': 0, 'low': 0}
 
 # ===========================
@@ -266,7 +292,6 @@ def home():
             .btn-secondary {{ background: var(--secondary); border: none; }}
             .btn-success {{ background: var(--success); border: none; }}
             .btn-warning {{ background: var(--warning); border: none; }}
-            .btn-info {{ background: #5bc0de; border: none; }}
             .btn-outline-dark {{ color: var(--dark); border-color: var(--dark); }}
             .btn-outline-dark:hover {{ background: var(--dark) !important; color: white !important; }}
             .btn-outline-danger {{ color: #d9534f; border-color: #d9534f; }}
@@ -276,10 +301,9 @@ def home():
             .feature-icon {{ font-size: 2rem; margin-bottom: 10px; color: var(--primary); }}
             .alert {{ border-radius: 10px; }}
             .comment-box {{ border: 2px solid #dee2e6; border-radius: 10px; padding: 15px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
-            .comment-box textarea, .comment-box input {{ resize: vertical; min-height: 100px; border: 1px solid #ced4da; border-radius: 8px; }}
-            .tool-btn {{ width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0 5px; }}
+            .comment-box textarea {{ resize: vertical; min-height: 100px; border: 1px solid #ced4da; border-radius: 8px; }}
             .img-container {{ position: relative; display: inline-block; }}
-            #markupCanvas {{ position: absolute; top: 10px; left: 10px; cursor: crosshair; border-radius: 8px; }}
+            #markupCanvas {{ position: absolute; top: 10px; left: 10px; cursor: crosshair; }}
         </style>
     </head>
     <body>
@@ -535,7 +559,7 @@ def login():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>🔐 Login</title>
+        <title>Login</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
             body {{ background: #f8f9fa; }}
@@ -544,12 +568,12 @@ def login():
     </head>
     <body>
         <div class="container py-5">
-            <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+            <a href="/" class="btn btn-outline-primary btn-sm mb-3">Home</a>
             <div class="row justify-content-center">
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-body text-center">
-                            <h3>🔐 Admin Login</h3>
+                            <h3>Admin Login</h3>
                             <form method="POST">
                                 <input type="text" name="username" placeholder="Username" required class="form-control mb-3">
                                 <input type="password" name="password" placeholder="Password" required class="form-control mb-3">
@@ -617,9 +641,11 @@ def upload_file():
             conn.commit()
             conn.close()
         except Exception as e:
-            print("❌ DB Save failed:", str(e))
+            logger.error(f"❌ DB Save failed: {str(e)}")
 
-        safe_result_filename = result_filename.replace('%', '%25').replace(' ', '%20').replace('#', '%23').replace('?', '%3F').replace('\\', '%5C').replace('^', '%5E')
+        safe_comment = (existing_comment or '').replace('"', '&quot;').replace("'", "\\'")
+        safe_custom_name = (existing_custom_name or '').replace('"', '&quot;').replace("'", "\\'")
+        safe_result_filename = result_filename.replace('"', '&quot;').replace("'", "\\'")
 
         return f'''
         <!DOCTYPE html>
@@ -681,14 +707,6 @@ def upload_file():
                     background: white;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
                 }}
-                .comment-box textarea, .comment-box input {{
-                    width: 100%;
-                    padding: 8px;
-                    margin: 8px 0;
-                    border: 1px solid #ced4da;
-                    border-radius: 8px;
-                    font-size: 14px;
-                }}
                 .tool-btn {{
                     width: 40px;
                     height: 40px;
@@ -701,7 +719,6 @@ def upload_file():
         </head>
         <body>
             <div class="container py-4">
-                <!-- Home Button -->
                 <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
 
                 <div class="row justify-content-center">
@@ -712,13 +729,11 @@ def upload_file():
                                     <i class="fas fa-check-circle"></i> Detection Complete
                                 </h1>
 
-                                <!-- Result Summary -->
                                 <div class="alert alert-success mb-4">
                                     <h5>📋 Inspection Result</h5>
                                     <p class="mb-0" style="font-size:1.1em;">{result_text.replace('<br>', '<br>')}</p>
                                 </div>
 
-                                <!-- Images Side by Side -->
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
                                         <div class="img-container">
@@ -746,33 +761,31 @@ def upload_file():
                                     </div>
                                 </div>
 
-                                <!-- Rename Report -->
                                 <div class="comment-box mb-4">
                                     <form id="renameForm" class="w-100">
                                         <label for="custom_name" class="form-label"><strong>📋 Rename This Report</strong></label>
                                         <input type="text" 
                                                name="custom_name" 
                                                id="custom_name" 
+                                               class="form-control mb-3"
                                                placeholder="e.g., Pipe_Joint_Inspection_Aug25"
-                                               value="{existing_custom_name}">
+                                               value="{safe_custom_name}">
                                         <button type="submit" class="btn btn-primary w-100">
                                             <i class="fas fa-edit"></i> Save Report Name
                                         </button>
                                     </form>
                                 </div>
 
-                                <!-- Comment Box -->
                                 <div class="comment-box mb-4">
                                     <form id="commentForm" class="w-100">
                                         <label for="comment" class="form-label"><strong>Comments & Observations</strong></label>
-                                        <textarea name="comment" id="comment" placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair">{existing_comment}</textarea>
+                                        <textarea name="comment" id="comment" class="form-control mb-3" placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair">{safe_comment}</textarea>
                                         <button type="submit" class="btn btn-primary w-100">
                                             <i class="fas fa-save"></i> Save Comment
                                         </button>
                                     </form>
                                 </div>
 
-                                <!-- Feedback & Actions -->
                                 <div class="mt-4 p-3 bg-light rounded">
                                     <p class="mb-3"><strong>Was this result correct?</strong></p>
                                     <div class="d-flex justify-content-center gap-3 flex-wrap">
@@ -785,7 +798,6 @@ def upload_file():
                                     </div>
                                 </div>
 
-                                <!-- Navigation -->
                                 <div class="mt-4">
                                     <a href="/" class="btn btn-outline-primary me-2 mb-2">
                                         <i class="fas fa-upload"></i> Upload Another
@@ -812,6 +824,7 @@ def upload_file():
                 let lastY = 0;
 
                 function initCanvas(img) {{
+                    const container = document.getElementById('detectedContainer');
                     canvas = document.getElementById('markupCanvas');
                     ctx = canvas.getContext('2d');
                     canvas.width = img.naturalWidth;
@@ -827,7 +840,7 @@ def upload_file():
                     canvas.style.width = displayWidth + 'px';
                     canvas.style.height = displayHeight + 'px';
 
-                    const saved = localStorage.getItem('markup_{safe_result_filename}');
+                    const saved = localStorage.getItem('markup_' + '{result_filename}');
                     if (saved) {{
                         const imgData = new Image();
                         imgData.onload = function() {{
@@ -867,7 +880,6 @@ def upload_file():
                     canvas.addEventListener('mouseup', () => isDrawing = false);
                     canvas.addEventListener('mouseout', () => isDrawing = false);
 
-                    // Touch support
                     canvas.addEventListener('touchstart', (e) => {{
                         e.preventDefault();
                         const touch = e.touches[0];
@@ -920,13 +932,12 @@ def upload_file():
                       }});
                 }}
 
-                // Rename Report
                 document.getElementById('renameForm').addEventListener('submit', function(e) {{
                     e.preventDefault();
                     const formData = new FormData(this);
                     const customName = formData.get('custom_name');
 
-                    fetch('/rename_report/{safe_result_filename}', {{
+                    fetch('/rename_report/{result_filename}', {{
                         method: 'POST',
                         body: new URLSearchParams({{ custom_name: customName }})
                     }}).then(res => res.text())
@@ -937,13 +948,12 @@ def upload_file():
                       }});
                 }});
 
-                // Save Comment
                 document.getElementById('commentForm').addEventListener('submit', function(e) {{
                     e.preventDefault();
                     const formData = new FormData(this);
                     const comment = formData.get('comment');
 
-                    fetch('/save_comment/{safe_result_filename}', {{
+                    fetch('/save_comment/{result_filename}', {{
                         method: 'POST',
                         body: new URLSearchParams({{ comment: comment }})
                     }}).then(res => res.text())
@@ -991,7 +1001,7 @@ def predict_api():
             conn.commit()
             conn.close()
         except Exception as e:
-            print("DB Save failed:", str(e))
+            logger.error(f"DB Save failed: {str(e)}")
 
         return {
             "result_image": f"/static/results/{result_filename}",
@@ -999,7 +1009,7 @@ def predict_api():
         }
 
     except Exception as e:
-        print("❌ API Error:", str(e))
+        logger.error(f"❌ API Error: {str(e)}")
         return {"error": str(e)}, 500
 
 @app.route('/confirm/<result_filename>')
@@ -1012,7 +1022,7 @@ def confirm(result_filename):
         conn.commit()
         conn.close()
     except Exception as e:
-        print("❌ DB Update failed:", str(e))
+        logger.error(f"❌ DB Update failed: {str(e)}")
 
     if correct:
         title = "Thank You!"
@@ -1178,12 +1188,12 @@ def view_reports():
             severity_badges += f'<span class="badge bg-success">Low: {row["low_severity"]}</span>'
 
         safe_filename = row['original_image'].replace("'", "\\'")
-        custom_name = row['custom_name'] or row['original_image']
+        display_name = row['custom_name'] or row['original_image']
         table_rows += f"""
         <tr>
             <td><input type="checkbox" class="delete-checkbox" data-id="{row['id']}" data-filename="{safe_filename}"></td>
             <td>{row['id']}</td>
-            <td><small>{custom_name}</small></td>
+            <td><small>{display_name}</small></td>
             <td>{severity_badges}</td>
             <td>{confirmed}</td>
             <td><small>{row['timestamp']}</small></td>
@@ -1229,7 +1239,6 @@ def view_reports():
     </head>
     <body>
         <div class="container">
-            <!-- Header with Home Button -->
             <div class="header">
                 <div class="d-flex justify-content-between align-items-center">
                     <h1>📋 Inspection Reports</h1>
@@ -1249,7 +1258,6 @@ def view_reports():
 
             {form_html}
 
-            <!-- Bulk Delete Controls -->
             <div class="bulk-actions">
                 <button id="bulkDeleteBtn" class="btn btn-outline-danger btn-sm" disabled>
                     <i class="fas fa-trash"></i> Delete Selected
@@ -1286,7 +1294,6 @@ def view_reports():
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
         <script>
-            // Bulk Selection Logic
             const selectAll = document.getElementById('select-all');
             const checkboxes = document.querySelectorAll('.delete-checkbox');
             const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
@@ -1308,14 +1315,12 @@ def view_reports():
                 cb.addEventListener('change', updateBulkActionState);
             }});
 
-            // Confirm and Delete Function
             function confirmDelete(id, filename) {{
                 if (confirm(`Are you sure you want to delete report #${{id}} (${{filename}})? This cannot be undone.`)) {{
                     deleteReports([id]);
                 }}
             }}
 
-            // Bulk Delete Function
             document.getElementById('bulkDeleteBtn').addEventListener('click', function() {{
                 const checked = document.querySelectorAll('.delete-checkbox:checked');
                 const ids = Array.from(checked).map(cb => parseInt(cb.dataset.id));
@@ -1326,7 +1331,6 @@ def view_reports():
                 }}
             }});
 
-            // API Call to Delete
             function deleteReports(ids) {{
                 fetch('/delete', {{
                     method: 'POST',
@@ -1381,11 +1385,8 @@ def delete_reports():
             try:
                 os.remove(os.path.join('static/uploads', row['original_image']))
                 os.remove(os.path.join('static/results', row['result_image']))
-                markup_path = os.path.join('static/results', 'markup', f'markup_{row["result_image"]}')
-                if os.path.exists(markup_path):
-                    os.remove(markup_path)
             except Exception as e:
-                print(f"⚠️ Could not delete files for ID {detection_id}: {e}")
+                logger.warning(f"⚠️ Could not delete files for ID {detection_id}: {e}")
 
             c.execute("DELETE FROM detections WHERE id = ?", (detection_id,))
             results['success'].append(detection_id)
@@ -1394,7 +1395,7 @@ def delete_reports():
         conn.close()
         return {"success": True, "results": results}
     except Exception as e:
-        print("❌ Delete failed:", str(e))
+        logger.error(f"❌ Delete failed: {str(e)}")
         return {"success": False, "error": str(e)}, 500
 
 @app.route('/download_all_pdfs')
@@ -1429,15 +1430,109 @@ def download_pdf(detection_id):
         if not row:
             return "Report not found", 404
 
-        from generate_pdf import create_pdf_report
-        orig_path = os.path.join('static/uploads', row['original_image'])
-        result_path = os.path.join('static/results', row['result_image'])
-        pdf_filename = f"{row['custom_name'] or 'report_' + str(detection_id)}.pdf"
-        pdf_path = os.path.join('static/reports', pdf_filename)
-        os.makedirs('static/reports', exist_ok=True)
+        # Create PDF report
+        orig_path = os.path.join('static', 'uploads', row['original_image'])
+        result_path = os.path.join('static', 'results', row['result_image'])
+        pdf_filename = f"report_{detection_id}.pdf"
+        pdf_path = os.path.join('static', 'reports', pdf_filename)
+        
+        # Debug: Check if files exist
+        logger.info(f"Original image: {orig_path} exists: {os.path.exists(orig_path)}")
+        logger.info(f"Result image: {result_path} exists: {os.path.exists(result_path)}")
 
-        #create_pdf_report(orig_path, result_path, row['result_text'], pdf_path, row['original_image'], row['comments'], row['custom_name'])
-        create_pdf_report(orig_path, result_path, row['result_text'], pdf_path, row['original_image'], row['comments'])
+        # Generate PDF with images
+        try:
+            from fpdf import FPDF
+            
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", 'B', 16)
+            pdf.set_text_color(0, 0, 128)
+            pdf.cell(0, 10, "Corrosion Inspection Report", ln=True, align='C')
+            pdf.ln(5)
+
+            # Add metadata
+            pdf.set_font("Arial", size=12)
+            pdf.set_text_color(0, 0, 0)
+            display_name = row['custom_name'] or row['original_image']
+            pdf.cell(0, 8, f"Image: {display_name}", ln=True)
+            pdf.cell(0, 8, f"Generated on: {pdf_filename}", ln=True)
+            pdf.ln(5)
+
+            # Add detection result
+            pdf.set_font("Arial", 'B', 12)
+            pdf.set_text_color(255, 0, 0)
+            pdf.cell(0, 8, "Detection Result:", ln=True)
+            pdf.set_font("Arial", size=11)
+            pdf.set_text_color(0, 0, 0)
+            clean_text = row['result_text'].replace('<br>', '\n').replace('Corrosion Detected: PASS ', '').replace('Severity: ', '')
+            pdf.multi_cell(0, 6, clean_text)
+            pdf.ln(5)
+
+            # Add Comments
+            if row['comments'].strip():
+                pdf.set_font("Arial", 'B', 12)
+                pdf.set_text_color(0, 100, 0)
+                pdf.cell(0, 8, "Comments & Observations:", ln=True)
+                pdf.set_font("Arial", size=11)
+                pdf.set_text_color(0, 0, 0)
+                pdf.multi_cell(0, 6, row['comments'])
+                pdf.ln(5)
+
+            # Add Images
+            y = pdf.get_y() + 10
+            img_width = 90
+
+            # Check and add original image
+            if os.path.exists(orig_path):
+                try:
+                    pdf.image(orig_path, x=10, y=y, w=img_width)
+                except Exception as e:
+                    logger.error(f"❌ Error adding original image: {str(e)}")
+                    pdf.cell(90, 40, "Original image not found", border=1)
+            else:
+                pdf.cell(90, 40, "Original image missing", border=1)
+
+            # Check and add result image
+            if os.path.exists(result_path):
+                try:
+                    pdf.image(result_path, x=105, y=y, w=img_width)
+                except Exception as e:
+                    logger.error(f"❌ Error adding result image: {str(e)}")
+                    pdf.cell(90, 40, "Detected image not found", border=1)
+            else:
+                pdf.cell(90, 40, "Detected image missing", border=1)
+
+            # Labels
+            pdf.set_y(y + 85)
+            pdf.set_font("Arial", 'I', 10)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(90, 6, "Original Image", align='C')
+            pdf.cell(90, 6, "Detected Corrosion", align='C')
+
+            pdf.output(pdf_path)
+            
+        except Exception as e:
+            logger.error(f"❌ PDF generation error: {str(e)}")
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Error</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+            </head>
+            <body>
+                <div class="container py-5">
+                    <a href="/" class="btn btn-outline-primary btn-sm mb-3">Home</a>
+                    <div class="alert alert-danger">
+                        <h4>❌ Error Generating PDF</h4>
+                        <p>{str(e)}</p>
+                    </div>
+                    <a href="/reports" class="btn btn-secondary">← Back to Reports</a>
+                </div>
+            </body>
+            </html>
+            '''
 
         return f'''
         <!DOCTYPE html>
@@ -1521,16 +1616,17 @@ def download_pdf(detection_id):
         '''
 
     except Exception as e:
+        logger.error(f"❌ Download PDF error: {str(e)}")
         return f'''
         <!DOCTYPE html>
         <html>
         <head>
-            <title>❌ Error</title>
+            <title>Error</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         </head>
         <body>
             <div class="container py-5">
-                <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+                <a href="/" class="btn btn-outline-primary btn-sm mb-3">Home</a>
                 <div class="alert alert-danger">
                     <h4>❌ Error Generating PDF</h4>
                     <p>{str(e)}</p>
@@ -1550,64 +1646,43 @@ def save_markup():
         image_data = base64.b64decode(markup_data)
 
         markup_dir = os.path.join(app.config['RESULT_FOLDER'], 'markup')
+        os.makedirs(markup_dir, exist_ok=True)
         markup_path = os.path.join(markup_dir, f"markup_{image_name}")
 
         with open(markup_path, 'wb') as f:
             f.write(image_data)
 
-        return {"success": True}
-    except Exception as e:
-        print("❌ Save markup failed:", str(e))
-        return {"success": False, "error": str(e)}, 500
-
-@app.route('/save_comment/<result_filename>', methods=['POST'])
-def save_comment(result_filename):
-    comment = request.form.get('comment', '').strip()
-    try:
         conn = sqlite3.connect('corrosion.db')
         c = conn.cursor()
-        c.execute("UPDATE detections SET comments = ? WHERE result_image = ?", (comment, result_filename))
+        c.execute("UPDATE detections SET comments = comments || '\n[Markup saved]' WHERE result_image = ?", (image_name,))
         conn.commit()
         conn.close()
-        message = "✅ Comment saved successfully!"
-        alert_class = "success"
-    except Exception as e:
-        message = f"❌ Error saving comment: {str(e)}"
-        alert_class = "danger"
 
-    return f'''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>✅ Comment Saved</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body {{ background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%); font-family: 'Segoe UI', sans-serif; }}
-            .alert {{ border-radius: 10px; }}
-            footer {{ margin-top: 50px; text-align: center; color: #6c757d; font-size: 0.9em; }}
-        </style>
-    </head>
-    <body>
-        <div class="container py-4">
-            <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
-            <div class="row justify-content-center">
-                <div class="col-lg-8">
-                    <div class="alert alert-{alert_class} text-center">
-                        <h4>{message}</h4>
-                    </div>
-                    <div class="text-center mt-4">
-                        <a href="/reports" class="btn btn-primary me-2">📋 Reports</a>
-                        <a href="/" class="btn btn-outline-dark">🏠 Home</a>
-                    </div>
-                </div>
-            </div>
-            <footer class="mt-5">Corrosion Detection AI © 2025</footer>
-        </div>
-    </body>
-    </html>
-    '''
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"❌ Save markup failed: {str(e)}")
+        return {"success": False, "error": str(e)}, 500
+
+@app.route('/download_marked/<result_filename>')
+@login_required
+def download_marked_image(result_filename):
+    result_path = os.path.join(app.config['RESULT_FOLDER'], result_filename)
+    markup_path = os.path.join(app.config['RESULT_FOLDER'], 'markup', f'markup_{result_filename}')
+    
+    try:
+        base = Image.open(result_path).convert("RGBA")
+        if os.path.exists(markup_path):
+            overlay = Image.open(markup_path).convert("RGBA")
+            overlay = overlay.resize(base.size, Image.Resampling.LANCZOS)
+            combined = Image.alpha_composite(base, overlay)
+            temp_buffer = BytesIO()
+            combined.convert("RGB").save(temp_buffer, "JPEG")
+            temp_buffer.seek(0)
+            return send_file(temp_buffer, mimetype='image/jpeg', as_attachment=True, download_name=f"marked_{result_filename}")
+        else:
+            return send_file(result_path, as_attachment=True)
+    except Exception as e:
+        return f"Error: {e}", 500
 
 @app.route('/rename_report/<result_filename>', methods=['POST'])
 def rename_report(result_filename):
@@ -1661,30 +1736,58 @@ def rename_report(result_filename):
     </html>
     '''
 
-@app.route('/download_marked/<result_filename>')
-@login_required
-def download_marked_image(result_filename):
-    result_path = os.path.join(app.config['RESULT_FOLDER'], result_filename)
-    markup_path = os.path.join(app.config['RESULT_FOLDER'], 'markup', f'markup_{result_filename}')
-    
+@app.route('/save_comment/<result_filename>', methods=['POST'])
+def save_comment(result_filename):
+    comment = request.form.get('comment', '').strip()
     try:
-        base = Image.open(result_path).convert("RGBA")
-        if os.path.exists(markup_path):
-            overlay = Image.open(markup_path).convert("RGBA")
-            overlay = overlay.resize(base.size, Image.Resampling.LANCZOS)
-            combined = Image.alpha_composite(base, overlay)
-            temp_buffer = BytesIO()
-            combined.convert("RGB").save(temp_buffer, "JPEG")
-            temp_buffer.seek(0)
-            return send_file(temp_buffer, mimetype='image/jpeg', as_attachment=True, download_name=f"marked_{result_filename}")
-        else:
-            return send_file(result_path, as_attachment=True, download_name=f"marked_{result_filename}")
+        conn = sqlite3.connect('corrosion.db')
+        c = conn.cursor()
+        c.execute("UPDATE detections SET comments = ? WHERE result_image = ?", (comment, result_filename))
+        conn.commit()
+        conn.close()
+        message = "✅ Comment saved successfully!"
+        alert_class = "success"
     except Exception as e:
-        return f"Error: {e}", 500
+        message = f"❌ Error saving comment: {str(e)}"
+        alert_class = "danger"
+
+    return f'''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>✅ Comment Saved</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            body {{ background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%); font-family: 'Segoe UI', sans-serif; }}
+            .alert {{ border-radius: 10px; }}
+            footer {{ margin-top: 50px; text-align: center; color: #6c757d; font-size: 0.9em; }}
+        </style>
+    </head>
+    <body>
+        <div class="container py-4">
+            <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="alert alert-{alert_class} text-center">
+                        <h4>{message}</h4>
+                    </div>
+                    <div class="text-center mt-4">
+                        <a href="/reports" class="btn btn-primary me-2">📋 Reports</a>
+                        <a href="/" class="btn btn-outline-dark">🏠 Home</a>
+                    </div>
+                </div>
+            </div>
+            <footer class="mt-5">Corrosion Detection AI © 2025</footer>
+        </div>
+    </body>
+    </html>
+    '''
 
 # ===========================
 # Run the App
 # ===========================
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
