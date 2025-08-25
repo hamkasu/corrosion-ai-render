@@ -4,12 +4,6 @@ from fpdf import FPDF
 from PIL import Image
 import os
 
-# Before calling create_pdf_report
-if not os.path.exists(orig_path):
-    print(f"❌ Original image not found: {orig_path}")
-if not os.path.exists(result_path):
-    print(f"❌ Result image not found: {result_path}")
-
 def create_pdf_report(original_image_path, result_image_path, result_text, pdf_path, original_filename, comments=""):
     pdf = FPDF()
     pdf.add_page()
@@ -47,18 +41,29 @@ def create_pdf_report(original_image_path, result_image_path, result_text, pdf_p
 
     # === Image Section ===
     y = pdf.get_y() + 10
-    img_width = 90  # PDF width in mm
+    img_width = 90
+
+    # 🔍 Debug: Print paths and check existence
+    print("📄 PDF Generation Debug:")
+    print("Original Image:", original_image_path, "Exists:", os.path.exists(original_image_path))
+    print("Result Image:  ", result_image_path, "Exists:", os.path.exists(result_image_path))
 
     try:
-        # ✅ Use file path directly (not URL)
+        # ✅ Use full path and verify image
+        img = Image.open(original_image_path)
+        img.verify()  # Verify it's a valid image
         pdf.image(original_image_path, x=10, y=y, w=img_width)
     except Exception as e:
-        pdf.cell(90, 40, "Original image not found", border=1)
+        print("❌ Error with original image:", str(e))
+        pdf.cell(90, 40, "Original image missing", border=1)
 
     try:
+        img = Image.open(result_image_path)
+        img.verify()  # Verify it's a valid image
         pdf.image(result_image_path, x=105, y=y, w=img_width)
     except Exception as e:
-        pdf.cell(90, 40, "Detected image not found", border=1)
+        print("❌ Error with result image:", str(e))
+        pdf.cell(90, 40, "Detected image missing", border=1)
 
     # Labels
     pdf.set_y(y + 85)

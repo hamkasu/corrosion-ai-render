@@ -17,6 +17,11 @@ from datetime import datetime
 import zipfile
 import io
 
+# Ensure directories exist
+os.makedirs('static/uploads', exist_ok=True)
+os.makedirs('static/results', exist_ok=True)
+os.makedirs('static/reports', exist_ok=True)
+
 # ===========================
 # Flask App Setup
 # ===========================
