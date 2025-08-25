@@ -309,7 +309,13 @@ def home():
     <body>
         <nav class="navbar navbar-expand-lg navbar-light sticky-top">
             <div class="container">
-                <a class="navbar-brand fw-bold" href="/">📸 Corrosion Inspector</a>
+                <a class="navbar-brand d-flex align-items-center" href="/">
+    			<img src="/static/images/logo.png" alt="Logo" width="40" height="40" class="me-2 rounded">
+    			<div>
+        		<div class="fw-bold">Calmic Sdn Bhd</div>
+        		<div style="font-size: 0.8em; opacity: 0.9;">Corrosion Inspector</div>
+    		</div>
+	</a>
                 <div class="ms-auto">
                     {''
                       f'<span class="navbar-text me-2"><i class="fas fa-user"></i> Hello, {username}</span>'
