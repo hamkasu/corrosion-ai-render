@@ -428,7 +428,7 @@ def home():
         </div>
 
         <footer class="container text-center mt-5 text-muted">
-            <p>Corrosion Detection AI © 2025 | Built with Ultralytics YOLOv8</p>
+            <p>Calmic Sdn Bhd | Corrosion Detection AI © 2025 | Built with Ultralytics YOLOv8</p>
         </footer>
 
         <script>
@@ -818,7 +818,7 @@ def upload_file():
                 </div>
 
                 <footer class="mt-5">
-                    Corrosion Detection AI © 2025 | Powered by Ultralytics YOLOv8
+                    Calmic Sdn Bhd|Corrosion Detection AI © 2025 | Powered by Ultralytics YOLOv8
                 </footer>
             </div>
 
@@ -1097,7 +1097,7 @@ def confirm(result_filename):
             </div>
 
             <footer class="mt-5">
-                Corrosion Detection AI © 2025 | Feedback helps train smarter AI
+                Calmic Sdn Bhd|Corrosion Detection AI © 2025 | Feedback helps train smarter AI
             </footer>
         </div>
 
@@ -1294,7 +1294,7 @@ def view_reports():
             </div>
 
             <footer class="mt-4">
-                Corrosion Detection AI © 2025 | Total: {len(rows)} report(s)
+                Calmic Sdn Bhd|Corrosion Detection AI © 2025 | Total: {len(rows)} report(s)
             </footer>
         </div>
 
@@ -1612,7 +1612,7 @@ def download_pdf(detection_id):
                 </div>
 
                 <footer class="mt-5">
-                    Corrosion Detection AI © 2025 | Report: #{detection_id}
+                    Calmic Sdn Bhd|Corrosion Detection AI © 2025 | Report: #{detection_id}
                 </footer>
             </div>
 
@@ -1736,7 +1736,7 @@ def rename_report(result_filename):
                     </div>
                 </div>
             </div>
-            <footer class="mt-5">Corrosion Detection AI © 2025</footer>
+            <footer class="mt-5"> Calmic Sdn Bhd|Corrosion Detection AI © 2025</footer>
         </div>
     </body>
     </html>
@@ -1785,7 +1785,7 @@ def save_comment(result_filename):
                     </div>
                 </div>
             </div>
-            <footer class="mt-5">Corrosion Detection AI © 2025</footer>
+            <footer class="mt-5">Calmic Sdn Bhd|Corrosion Detection AI © 2025</footer>
         </div>
     </body>
     </html>
