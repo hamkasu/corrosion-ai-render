@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Result</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f7fa; }
+        .img-container img { max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+        <h1 class="text-success">Detection Complete</h1>
+        <div class="alert alert-success">
+            <p><strong>Result:</strong> {{ result }}</p>
+        </div>
+
+        <div class="img-container mb-4">
+            <h6>📸 Detected Image</h6>
+            <img src="{{ image_url }}" alt="Result">
+        </div>
+
+        <a href="/camera" class="btn btn-warning">📸 Retake</a>
+        <a href="/reports" class="btn btn-primary">📋 View Reports</a>
+    </div>
+</body>
+</html>

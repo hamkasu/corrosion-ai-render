@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Inspection Reports</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%); color: #333; }
+        [data-theme="dark"] {
+            --bs-body-bg: #1a1a1a;
+            --bs-body-color: #f0f0f0;
+            --bs-card-bg: #2c2c2c;
+            --bs-table-bg: #2c2c2c;
+            --bs-table-striped-bg: #3c3c3c;
+            --bs-border-color: #444;
+            --bs-btn-color: #fff;
+            --bs-btn-bg: #d9534f;
+            --bs-btn-border-color: #d9534f;
+            background: #1a1a1a !important;
+            color: #f0f0f0;
+        }
+        .card { border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .btn { border-radius: 50px; padding: 10px 20px; font-weight: 600; }
+        .table-responsive { border-radius: 10px; overflow: hidden; }
+        .table th { background-color: #f1f3f5; }
+        [data-theme="dark"] .table th { background-color: #3c3c3c; }
+        .form-check-input:checked { background-color: #d9534f; border-color: #d9534f; }
+        .bulk-actions { margin-bottom: 15px; }
+    </style>
+</head>
+<body {% if dark_mode %}data-theme="dark"{% endif %}>
+    <div class="container py-4">
+        <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+        <h1 class="mb-4">Inspection Reports</h1>
+
+        <!-- Bulk Actions -->
+        <div class="bulk-actions">
+            <button onclick="bulkDelete()" class="btn btn-danger btn-sm">🗑️ Delete Selected</button>
+            <button onclick="selectAll()" class="btn btn-outline-secondary btn-sm ms-2">✅ Select All</button>
+            <button onclick="clearAll()" class="btn btn-outline-secondary btn-sm ms-2">❌ Clear All</button>
+        </div>
+
+        <!-- Reports Table -->
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="select-all" onchange="toggleSelectAll()"></th>
+                        <th>ID</th>
+                        <th>Report Name</th>
+                        <th>Severity</th>
+                        <th>Confirmed</th>
+                        <th>Timestamp</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in reports %}
+                    <tr>
+                        <td><input type="checkbox" class="select-report" value="{{ row['id'] }}"></td>
+                        <td>{{ row['id'] }}</td>
+                        <td><small>{{ row['custom_name'] or row['original_image'] }}</small></td>
+                        <td>
+                            High: {{ row['high_severity'] }}, 
+                            Med: {{ row['medium_severity'] }}, 
+                            Low: {{ row['low_severity'] }}
+                        </td>
+                        <td>{% if row['confirmed'] %}<span class="text-success">✅ Yes</span>{% else %}<span class="text-danger">❌ No</span>{% endif %}</td>
+                        <td><small>{{ row['timestamp'] }}</small></td>
+                        <td>
+                            <a href="/download_pdf/{{ row['id'] }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </a>
+                            <button onclick="confirmDelete({{ row['id'] }}, '{{ row['original_image'] }}')" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- No Reports -->
+        {% if not reports %}
+        <div class="text-center text-muted my-5">
+            <i class="fas fa-folder-open fa-3x mb-3"></i>
+            <h5>No inspection reports found</h5>
+            <p>Upload an image to start a new inspection.</p>
+            <a href="/" class="btn btn-primary">Upload Image</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all');
+            const checkboxes = document.querySelectorAll('.select-report');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        }
+
+        function selectAll() {
+            document.getElementById('select-all').checked = true;
+            document.querySelectorAll('.select-report').forEach(cb => cb.checked = true);
+        }
+
+        function clearAll() {
+            document.getElementById('select-all').checked = false;
+            document.querySelectorAll('.select-report').forEach(cb => cb.checked = false);
+        }
+
+        function confirmDelete(id, filename) {
+            if (confirm(`Delete report #${id}? This cannot be undone.`)) {
+                fetch('/delete_report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`✅ Deleted report #${id}`);
+                        location.reload();
+                    } else {
+                        alert('❌ Delete failed: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    alert('❌ Network error: ' + err.message);
+                });
+            }
+        }
+
+        function bulkDelete() {
+            const selected = Array.from(document.querySelectorAll('.select-report:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('Please select at least one report to delete.');
+                return;
+            }
+
+            if (confirm(`Delete ${selected.length} report(s)? This cannot be undone.`)) {
+                fetch('/bulk_delete_reports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: selected })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`✅ Deleted ${data.deleted_count} report(s)`);
+                        location.reload();
+                    } else {
+                        alert('❌ Delete failed: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(err => {
+                    alert('❌ Network error: ' + err.message);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
