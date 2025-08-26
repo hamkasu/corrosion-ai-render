@@ -239,23 +239,74 @@ def rename_report():
 @login_required
 def view_reports():
     try:
+        # Check if DB exists
         if not os.path.exists('corrosion.db'):
             return "<h3>❌ Database not found! Run init_db.py</h3><br><a href='/'>Back</a>"
 
         conn = sqlite3.connect('corrosion.db')
-        conn.row_factory = sqlite3.Row
+        conn.row_factory = sqlite3.Row  # Allows dict-style access
         c = conn.cursor()
         c.execute("SELECT * FROM detections ORDER BY timestamp DESC")
         rows = c.fetchall()
         conn.close()
 
-        dark_mode = request.cookies.get('dark_mode') == '1'
-        return render_template('reports.html', reports=rows, dark_mode=dark_mode)
+        # Debug: Print how many reports found
+        print(f"📊 Found {len(rows)} reports")
 
+        # Generate HTML table
+        table_rows = ""
+        for row in rows:
+            name = row['custom_name'] or row['original_image']
+            table_rows += f"""
+            <tr>
+                <td>{row['id']}</td>
+                <td><small>{name}</small></td>
+                <td>High: {row['high_severity']}, Med: {row['medium_severity']}, Low: {row['low_severity']}</td>
+                <td>{"✅ Yes" if row['confirmed'] else "❌ No"}</td>
+                <td><small>{row['timestamp']}</small></td>
+                <td>
+                    <a href="/download_pdf/{row['id']}" class="btn btn-sm btn-outline-primary">PDF</a>
+                </td>
+            </tr>
+            """
+
+        if not table_rows:
+            table_rows = '<tr><td colspan="6" class="text-center text-muted">No reports found in database.</td></tr>'
+
+        return f'''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>📋 Inspection Reports</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container py-4">
+                <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+                <h1 class="mb-4">Inspection Reports</h1>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Report Name</th>
+                                <th>Severity</th>
+                                <th>Confirmed</th>
+                                <th>Timestamp</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>{table_rows}</tbody>
+                    </table>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
     except Exception as e:
-        print("❌ Reports Error:", str(e))
         return f"<h3>❌ Error loading reports: {str(e)}</h3><br><a href='/'>Back</a>"
-
 @app.route('/confirm/<result_filename>')
 def confirm(result_filename):
     correct = request.args.get('correct') == 'true'
@@ -301,6 +352,7 @@ def save_markup():
         print("❌ Save markup failed:", str(e))
         return {"success": False, "error": str(e)}, 500
 
+
 @app.route('/download_pdf/<int:detection_id>')
 @login_required
 def download_pdf(detection_id):
@@ -322,8 +374,10 @@ def download_pdf(detection_id):
         pdf_filename = f"report_{detection_id}.pdf"
         pdf_path = os.path.join('static/reports', pdf_filename)
 
+        # Create reports folder
         os.makedirs('static/reports', exist_ok=True)
 
+        # Generate PDF
         create_pdf_report(
             orig_path,
             result_path,
@@ -334,11 +388,24 @@ def download_pdf(detection_id):
             row['custom_name']
         )
 
+        # Serve PDF
         return send_file(pdf_path, as_attachment=True, download_name=pdf_filename)
 
     except Exception as e:
         print("❌ PDF Error:", str(e))
         return f"<h3>Error: {str(e)}</h3><br><a href='/reports'>Back</a>"
+
+@app.route('/download_all_pdfs')
+@login_required
+def download_all_pdfs():
+    import zipfile
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w') as zf:
+        for filename in os.listdir('static/reports'):
+            if filename.endswith('.pdf'):
+                zf.write(os.path.join('static/reports', filename), filename)
+    memory_file.seek(0)
+    return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='all_reports.zip')
 
 @app.route('/delete_report', methods=['POST'])
 @login_required
@@ -361,11 +428,16 @@ def delete_report():
         # Delete image files
         uploads_path = os.path.join(app.config['UPLOAD_FOLDER'], row['original_image'])
         results_path = os.path.join(app.config['RESULT_FOLDER'], row['result_image'])
-        markup_path = os.path.join(app.config['RESULT_FOLDER'], 'markup', f"markup_{row['result_image']}")
 
-        for path in [uploads_path, results_path, markup_path]:
-            if os.path.exists(path):
-                os.remove(path)
+        if os.path.exists(uploads_path):
+            os.remove(uploads_path)
+        if os.path.exists(results_path):
+            os.remove(results_path)
+
+        # Delete markup if exists
+        markup_path = os.path.join(app.config['RESULT_FOLDER'], 'markup', f"markup_{row['result_image']}")
+        if os.path.exists(markup_path):
+            os.remove(markup_path)
 
         # Delete from database
         c.execute("DELETE FROM detections WHERE id = ?", (report_id,))
@@ -377,117 +449,6 @@ def delete_report():
         print("❌ Delete failed:", str(e))
         return jsonify(success=False, error=str(e)), 500
 
-@app.route('/camera')
-@login_required
-def camera():
-    dark_mode = request.cookies.get('dark_mode') == '1'
-    return render_template('camera.html', dark_mode=dark_mode)
-
-import base64
-from io import BytesIO
-
-@app.route('/detect_camera', methods=['POST'])
-def detect_camera():
-    data = request.get_json()
-    image_data = data['image'].split(',')[1]
-    image_bytes = base64.b64decode(image_data)
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
-
-    # Resize for model
-    input_image = image.resize((640, 640))
-    
-    try:
-        results = model(input_image, conf=0.3)
-        # Extract result
-        high = med = low = 0
-        for r in results:
-            boxes = r.boxes
-            for box in boxes:
-                conf = box.conf.item()
-                if conf > 0.7: high += 1
-                elif conf > 0.5: med += 1
-                else: low += 1
-
-        result_text = f"Corrosion: High={high}, Med={med}, Low={low}"
-        
-        # Save result image
-        result_img = results[0].plot()
-        result_pil = Image.fromarray(result_img)
-        filename = f"camera_{uuid.uuid4().hex[:8]}.jpg"
-        result_path = os.path.join(app.config['RESULT_FOLDER'], filename)
-        result_pil.save(result_path)
-
-        # Save to DB
-        timestamp = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
-        conn = sqlite3.connect('corrosion.db')
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO detections (original_image, result_image, result_text, high_severity, medium_severity, low_severity, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (filename, filename, result_text, high, med, low, timestamp))
-        conn.commit()
-        conn.close()
-
-        return jsonify(success=True, result=result_text, image_url=f"/static/results/{filename}")
-    except Exception as e:
-        print("❌ Detect error:", str(e))
-        return jsonify(success=False, error=str(e))
-
-@app.route('/result_camera')
-def result_camera():
-    image_url = request.args.get('image')
-    result = request.args.get('result')
-    dark_mode = request.cookies.get('dark_mode') == '1'
-    return render_template('result_camera.html', image_url=image_url, result=result, dark_mode=dark_mode)
-
-@app.route('/materials')
-@login_required
-def materials():
-    dark_mode = request.cookies.get('dark_mode') == '1'
-    return render_template('materials.html', dark_mode=dark_mode)
-
-
-
-@app.route('/bulk_delete_reports', methods=['POST'])
-@login_required
-def bulk_delete_reports():
-    data = request.get_json()
-    ids = data.get('ids', [])
-
-    if not ids:
-        return jsonify(success=False, error="No IDs provided"), 400
-
-    deleted_count = 0
-    try:
-        conn = sqlite3.connect('corrosion.db')
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-
-        for report_id in ids:
-            c.execute("SELECT original_image, result_image FROM detections WHERE id = ?", (report_id,))
-            row = c.fetchone()
-            if not row:
-                continue
-
-            # Delete files
-            uploads_path = os.path.join(app.config['UPLOAD_FOLDER'], row['original_image'])
-            results_path = os.path.join(app.config['RESULT_FOLDER'], row['result_image'])
-            markup_path = os.path.join(app.config['RESULT_FOLDER'], 'markup', f"markup_{row['result_image']}")
-
-            for path in [uploads_path, results_path, markup_path]:
-                if os.path.exists(path):
-                    os.remove(path)
-
-            # Delete from DB
-            c.execute("DELETE FROM detections WHERE id = ?", (report_id,))
-            deleted_count += 1
-
-        conn.commit()
-        conn.close()
-        return jsonify(success=True, deleted_count=deleted_count)
-    except Exception as e:
-        print("❌ Bulk delete failed:", str(e))
-        return jsonify(success=False, error=str(e)), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

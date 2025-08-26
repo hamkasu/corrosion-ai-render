@@ -148,6 +148,7 @@ def home():
         print("📊 Stats error:", str(e))
     dark_mode = request.cookies.get('dark_mode') == '1'
     return render_template('home.html', stats=stats, dark_mode=dark_mode)
+    
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -246,14 +247,86 @@ def view_reports():
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         c.execute("SELECT * FROM detections ORDER BY timestamp DESC")
-        rows = c.fetchall()
+        rows = c.fetchall()  # This is a list of rows
         conn.close()
 
-        dark_mode = request.cookies.get('dark_mode') == '1'
-        return render_template('reports.html', reports=rows, dark_mode=dark_mode)
+        table_rows = ""
+        for row in rows:  # 'row' is each item in 'rows'
+            name = row['custom_name'] or row['original_image']
+            table_rows += f"""
+            <tr>
+                <td>{row['id']}</td>
+                <td><small>{name}</small></td>
+                <td>High: {row['high_severity']}, Med: {row['medium_severity']}, Low: {row['low_severity']}</td>
+                <td>{"✅ Yes" if row['confirmed'] else "❌ No"}</td>
+                <td><small>{row['timestamp']}</small></td>
+                <td>
+                    <a href="/download_pdf/{row['id']}" class="btn btn-sm btn-outline-primary">PDF</a>
+                    <button onclick="confirmDelete({row['id']}, '{name}')" class="btn btn-sm btn-outline-danger">🗑️ Delete</button>
+                </td>
+            </tr>
+            """
 
+        if not table_rows:
+            table_rows = '<tr><td colspan="6" class="text-center text-muted">No reports found.</td></tr>'
+
+        return f'''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>📋 Inspection Reports</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container py-4">
+                <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+                <h1 class="mb-4">Inspection Reports</h1>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Report Name</th>
+                                <th>Severity</th>
+                                <th>Confirmed</th>
+                                <th>Timestamp</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>{table_rows}</tbody>
+                    </table>
+                </div>
+            </div>
+
+            <script>
+            function confirmDelete(id, filename) {{
+                if (confirm(`Are you sure you want to delete report #${{id}} (${{filename}})? This cannot be undone.`)) {{
+                    fetch('/delete_report', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ id: id }})
+                    }})
+                    .then(res => res.json())
+                    .then(data => {{
+                        if (data.success) {{
+                            alert(`✅ Deleted report #${{id}}`);
+                            location.reload();
+                        }} else {{
+                            alert('❌ Delete failed: ' + (data.error || 'Unknown error'));
+                        }}
+                    }})
+                    .catch(err => {{
+                        alert('❌ Network error: ' + err.message);
+                    }});
+                }}
+            }}
+            </script>
+        </body>
+        </html>
+        '''
     except Exception as e:
-        print("❌ Reports Error:", str(e))
         return f"<h3>❌ Error loading reports: {str(e)}</h3><br><a href='/'>Back</a>"
 
 @app.route('/confirm/<result_filename>')
@@ -377,77 +450,6 @@ def delete_report():
         print("❌ Delete failed:", str(e))
         return jsonify(success=False, error=str(e)), 500
 
-@app.route('/camera')
-@login_required
-def camera():
-    dark_mode = request.cookies.get('dark_mode') == '1'
-    return render_template('camera.html', dark_mode=dark_mode)
-
-import base64
-from io import BytesIO
-
-@app.route('/detect_camera', methods=['POST'])
-def detect_camera():
-    data = request.get_json()
-    image_data = data['image'].split(',')[1]
-    image_bytes = base64.b64decode(image_data)
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
-
-    # Resize for model
-    input_image = image.resize((640, 640))
-    
-    try:
-        results = model(input_image, conf=0.3)
-        # Extract result
-        high = med = low = 0
-        for r in results:
-            boxes = r.boxes
-            for box in boxes:
-                conf = box.conf.item()
-                if conf > 0.7: high += 1
-                elif conf > 0.5: med += 1
-                else: low += 1
-
-        result_text = f"Corrosion: High={high}, Med={med}, Low={low}"
-        
-        # Save result image
-        result_img = results[0].plot()
-        result_pil = Image.fromarray(result_img)
-        filename = f"camera_{uuid.uuid4().hex[:8]}.jpg"
-        result_path = os.path.join(app.config['RESULT_FOLDER'], filename)
-        result_pil.save(result_path)
-
-        # Save to DB
-        timestamp = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
-        conn = sqlite3.connect('corrosion.db')
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO detections (original_image, result_image, result_text, high_severity, medium_severity, low_severity, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (filename, filename, result_text, high, med, low, timestamp))
-        conn.commit()
-        conn.close()
-
-        return jsonify(success=True, result=result_text, image_url=f"/static/results/{filename}")
-    except Exception as e:
-        print("❌ Detect error:", str(e))
-        return jsonify(success=False, error=str(e))
-
-@app.route('/result_camera')
-def result_camera():
-    image_url = request.args.get('image')
-    result = request.args.get('result')
-    dark_mode = request.cookies.get('dark_mode') == '1'
-    return render_template('result_camera.html', image_url=image_url, result=result, dark_mode=dark_mode)
-
-@app.route('/materials')
-@login_required
-def materials():
-    dark_mode = request.cookies.get('dark_mode') == '1'
-    return render_template('materials.html', dark_mode=dark_mode)
-
-
-
 @app.route('/bulk_delete_reports', methods=['POST'])
 @login_required
 def bulk_delete_reports():
@@ -464,6 +466,7 @@ def bulk_delete_reports():
         c = conn.cursor()
 
         for report_id in ids:
+            # Get image filenames
             c.execute("SELECT original_image, result_image FROM detections WHERE id = ?", (report_id,))
             row = c.fetchone()
             if not row:

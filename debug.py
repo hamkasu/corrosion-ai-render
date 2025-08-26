@@ -1,4 +1,4 @@
-# test_db.py
+# Run this in Python to debug
 import sqlite3
 conn = sqlite3.connect('corrosion.db')
 conn.row_factory = sqlite3.Row

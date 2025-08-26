@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📱 Live Camera Detection</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --primary: #d9534f; }
+        body { 
+            background: #000; 
+            color: white; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', sans-serif;
+        }
+        [data-theme="dark"] body { background: #121212; }
+
+        .container-fluid { padding: 10px; }
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid #333;
+        }
+        #video-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            z-index: 10;
+        }
+        .btn-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+        .btn-snap { background: white; color: var(--primary); }
+        .back-btn {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 11;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body {% if dark_mode %}data-theme="dark"{% endif %}>
+    <header>
+        <h5>Live Corrosion Detection</h5>
+    </header>
+
+    <a href="/" class="back-btn"><i class="fas fa-arrow-left"></i></a>
+
+    <div id="video-container">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="snap" class="btn btn-primary btn-circle btn-snap">
+            <i class="fas fa-camera"></i>
+        </button>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        const snapBtn = document.getElementById('snap');
+
+        // Access mobile camera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',  // Use rear camera
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                video.srcObject = stream;
+
+                video.onloadedmetadata = () => {
+                    // Match canvas to video resolution
+                    const { videoWidth, videoHeight } = video;
+                    canvas.width = videoWidth;
+                    canvas.height = videoHeight;
+
+                    // Scale video to full screen
+                    const screenRatio = window.innerWidth / window.innerHeight;
+                    const videoRatio = videoWidth / videoHeight;
+
+                    if (videoRatio > screenRatio) {
+                        video.style.width = '100%';
+                        video.style.height = 'auto';
+                    } else {
+                        video.style.width = 'auto';
+                        video.style.height = '100%';
+                    }
+                };
+            } catch (err) {
+                alert("❌ Camera access denied: " + err.message);
+            }
+        }
+
+        // Take snapshot and send to server
+        snapBtn.addEventListener('click', () => {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+            fetch('/detect_camera', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`✅ Detected: ${data.result}`);
+                    window.location.href = `/result_camera?image=${encodeURIComponent(data.image_url)}&result=${encodeURIComponent(data.result)}`;
+                } else {
+                    alert('❌ Detection failed');
+                }
+            });
+        });
+
+        // Start camera on load
+        startCamera();
+
+        // Prevent zoom on double-tap
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', e => {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+    </script>
+</body>
+</html>

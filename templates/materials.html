@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Materials Compatibility Checker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f7fa; }
+        [data-theme="dark"] {
+            --bs-body-bg: #1a1a1a;
+            --bs-body-color: #f0f0f0;
+            --bs-card-bg: #2c2c2c;
+            --bs-table-bg: #2c2c2c;
+            --bs-table-striped-bg: #3c3c3c;
+            --bs-border-color: #444;
+            background: #1a1a1a !important;
+            color: #f0f0f0;
+        }
+        .card { border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .btn { border-radius: 50px; padding: 10px 20px; font-weight: 600; }
+        .form-label { font-weight: 600; }
+    </style>
+</head>
+<body {% if dark_mode %}data-theme="dark"{% endif %}>
+    <div class="container py-4">
+        <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
+        <h1 class="mb-4">Materials Compatibility Checker</h1>
+
+        <div class="card p-4">
+            <form id="materialsForm">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Environment Type</label>
+                        <select class="form-select" id="environment" required>
+                            <option value="">Select Environment</option>
+                            <option value="offshore">Offshore / Marine</option>
+                            <option value="chemical">Chemical Plant</option>
+                            <option value="refinery">Oil & Gas Refinery</option>
+                            <option value="desalination">Desalination Plant</option>
+                            <option value="pulp">Pulp & Paper</option>
+                            <option value="high_temp">High Temperature</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Exposure Level</label>
+                        <select class="form-select" id="exposure" required>
+                            <option value="">Select Exposure</option>
+                            <option value="low">Low (Indoor, Dry)</option>
+                            <option value="medium">Medium (Humid, Occasional Wet)</option>
+                            <option value="high">High (Continuous Moisture, Salt Spray)</option>
+                            <option value="severe">Severe (Acidic, Alkaline, High Pressure)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Operating Temperature</label>
+                        <input type="text" class="form-control" id="temperature" placeholder="e.g., 25°C" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Fluid / Chemical Exposure</label>
+                        <input type="text" class="form-control" id="chemicals" placeholder="e.g., H2S, CO2, Chlorides">
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">🔍 Get Recommendations</button>
+                </div>
+            </form>
+
+            <div id="results" class="mt-4" style="display: none;">
+                <h5>Recommended Materials & Coatings</h5>
+                <div class="alert alert-success" id="materialResult"></div>
+                <div class="alert alert-info" id="coatingResult"></div>
+                <div class="alert alert-secondary" id="standardResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('materialsForm').onsubmit = function(e) {
+            e.preventDefault();
+            const env = document.getElementById('environment').value;
+            const exposure = document.getElementById('exposure').value;
+            const temp = document.getElementById('temperature').value;
+            const chem = document.getElementById('chemicals').value;
+
+            // Get recommendations
+            const recommendation = getMaterialRecommendation(env, exposure, temp, chem);
+            document.getElementById('materialResult').innerHTML = `<strong>Material:</strong> ${recommendation.material}`;
+            document.getElementById('coatingResult').innerHTML = `<strong>Coating:</strong> ${recommendation.coating}`;
+            document.getElementById('standardResult').innerHTML = `<strong>Standards:</strong> ${recommendation.standard}`;
+            document.getElementById('results').style.display = 'block';
+        };
+
+        function getMaterialRecommendation(env, exposure, temp, chem) {
+            // Default
+            let material = "Carbon Steel (with protection)";
+            let coating = "Epoxy-Polyamide Coating";
+            let standard = "NACE SP0198, ISO 12944";
+
+            // Rules Engine
+            if (env === 'offshore' || env === 'desalination') {
+                if (exposure === 'high' || exposure === 'severe') {
+                    material = "Duplex Stainless Steel (2205)";
+                    coating = "FBE (Fusion Bonded Epoxy) + 3LPE";
+                    standard = "NORSOK M-501, ISO 21809";
+                } else {
+                    material = "Galvanized Steel";
+                    coating = "Zinc-Rich Primer + Polyurethane Topcoat";
+                }
+            }
+            else if (env === 'chemical' || env === 'refinery') {
+                if (chem.includes('H2S') || chem.includes('sour')) {
+                    material = "SS316L or Inconel 625";
+                    coating = "Glass-Flake Epoxy";
+                    standard = "NACE MR0175/ISO 15156";
+                }
+                else if (chem.includes('acid') || chem.includes('HCl')) {
+                    material = "Hastelloy C-276 or FRP";
+                    coating = "PTFE Lining or Ni-P Coating";
+                }
+            }
+            else if (env === 'high_temp') {
+                material = "Alloy 800H or 321 Stainless Steel";
+                coating = "Ceramic Coating or Aluminizing";
+                standard = "ASME BPVC, API 571";
+            }
+
+            return { material, coating, standard };
+        }
+    </script>
+
+<button onclick="printRecommendations()" class="btn btn-success mt-3">
+    <i class="fas fa-file-pdf"></i> Save as PDF
+</button><script>
+function printRecommendations() {
+    const printContent = document.getElementById('results').innerHTML;
+    const originalContent = document.body.innerHTML;
+    document.body.innerHTML = `
+        <h1>Materials Compatibility Report</h1>
+        <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
+        ${printContent}
+    `;
+    window.print();
+    document.body.innerHTML = originalContent;
+    window.location.reload();
+}
+</script>
+
+
+
+</body>
+</html>

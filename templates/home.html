@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card p-3 text-center">
+            <h6>Total Inspections</h6>
+            <h3 class="text-primary">{{ stats.total }}</h3>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card p-3 text-center">
+            <h6>Confirmed</h6>
+            <h3 class="text-success">{{ stats.confirmed }}</h3>
+        </div>
+    </div>
+    <div class="col-md-6 col-12">
+        <div class="card p-3">
+            <h6>Severity Breakdown</h6>
+            <div class="d-flex justify-content-around">
+                <span class="badge bg-danger">High: {{ stats.high }}</span>
+                <span class="badge bg-warning text-dark">Medium: {{ stats.med }}</span>
+                <span class="badge bg-success">Low: {{ stats.low }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4 col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="feature-icon"><i class="fas fa-upload"></i></div>
+                <h5 class="card-title">Upload Image</h5>
+                <form method="POST" enctype="multipart/form-data" action="/upload" class="mt-3">
+                    <input type="file" name="file" accept="image/*" required class="form-control mb-2">
+                    <button type="submit" class="btn btn-primary w-100">Analyze</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+<div class="col-md-4 col-12">
+    <div class="card h-100">
+        <div class="card-body text-center">
+            <div class="feature-icon"><i class="fas fa-flask"></i></div>
+            <h5 class="card-title">Materials Compatibility</h5>
+            <a href="/materials" class="btn btn-info w-100">🔍 Check Materials</a>
+        </div>
+    </div>
+</div>
+
+<!-- Add this in home.html -->
+<div class="col-md-4 col-12">
+    <div class="card h-100">
+        <div class="card-body text-center">
+            <div class="feature-icon"><i class="fas fa-camera"></i></div>
+            <h5 class="card-title">Live Camera Detection</h5>
+            <a href="/camera" class="btn btn-warning w-100">📱 Open Camera</a>
+        </div>
+    </div>
+</div>
+
+    <div class="col-lg-4 col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="feature-icon"><i class="fas fa-file-pdf"></i></div>
+                <h5 class="card-title">Reports</h5>
+                <a href="/reports" class="btn btn-success w-100 mb-2">📋 View Reports</a>
+                <a href="/download_all_pdfs" class="btn btn-outline-dark w-100">📥 Download All</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,39 +1,297 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Result</title>
-  <style>
-    body { font-family: Arial; margin: 40px; text-align: center; }
-    h1 { color: #2c3e50; }
-    .images {
-      display: flex; justify-content: center; gap: 30px; margin: 30px 0; flex-wrap: wrap; }
-    .img-box {
-      text-align: center; border: 3px solid #ddd; padding: 10px; border-radius: 8px; }
-    .img-box img { max-width: 400px; max-height: 400px; object-fit: contain; }
-    .result-text {
-      font-size: 20px; margin: 20px 0; }
-    a { color: #3498db; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detection Result</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%); color: #333; }
+        [data-theme="dark"] {
+            --bs-body-bg: #1a1a1a;
+            --bs-body-color: #f0f0f0;
+            --bs-card-bg: #2c2c2c;
+            --bs-border-color: #444;
+            background: #1a1a1a !important;
+            color: #f0f0f0;
+        }
+        .card { border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .img-container { background: #f8f9fa; padding: 10px; border-radius: 10px; text-align: center; position: relative; display: inline-block; }
+        .img-container img { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        #markupCanvas { position: absolute; top: 10px; left: 10px; cursor: crosshair; }
+        .btn { border-radius: 50px; padding: 10px 20px; font-weight: 600; }
+        .comment-box { border: 2px solid #dee2e6; border-radius: 10px; padding: 15px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .tool-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0 5px; }
+        .alert-success { border-left: 5px solid #d9534f; }
+    </style>
 </head>
-<body>
-  <h1>🔍 Corrosion Detection Result</h1>
+<body {% if dark_mode %}data-theme="dark"{% endif %}>
+    <div class="container py-4">
+        <a href="/" class="btn btn-outline-primary btn-sm mb-3">🏠 Home</a>
 
-  <div class="images">
-    <div class="img-box">
-      <h3>Uploaded Image</h3>
-      <img src="{{ url_for('static', filename='uploads/' + original_filename) }}" alt="Original">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center">
+                        <h1 class="text-success mb-4">Detection Complete</h1>
+
+                        <div class="alert alert-success mb-4">
+                            <h5>Inspection Result</h5>
+                            <p class="mb-0" style="font-size:1.1em;">{{ result_text|safe }}</p>
+                        </div>
+
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-6">
+                                <div class="img-container">
+                                    <h6>📸 Original Image</h6>
+                                    <img src="/static/uploads/{{ filename }}" alt="Original">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="img-container" id="detectedContainer">
+                                    <h6>✏️ Detected & Markup</h6>
+                                    <img id="detectedImage" src="/static/results/{{ result_filename }}" alt="Detected" onload="initCanvas(this)">
+                                    <canvas id="markupCanvas"></canvas>
+                                </div>
+                                <div class="mt-2">
+                                    <button onclick="setDrawMode('pen')" class="btn btn-success tool-btn"><i class="fas fa-pen"></i></button>
+                                    <button onclick="setDrawMode('erase')" class="btn btn-danger tool-btn"><i class="fas fa-eraser"></i></button>
+                                    <button onclick="undo()" class="btn btn-warning tool-btn"><i class="fas fa-undo"></i></button>
+                                    <button onclick="redo()" class="btn btn-info tool-btn"><i class="fas fa-redo"></i></button>
+                                    <button onclick="exportMarked()" class="btn btn-primary">💾 Export PNG</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pen Controls -->
+                        <div class="mb-4 p-3 bg-light rounded">
+                            <label><strong>🖌️ Pen Color:</strong></label>
+                            <input type="color" id="penColor" value="#FF0000" class="form-control w-auto d-inline-block me-3">
+                            <label><strong>📏 Size:</strong></label>
+                            <input type="range" id="penSize" min="1" max="20" value="3" class="form-range w-auto d-inline-block me-2">
+                            <span id="sizeValue">3px</span>
+                        </div>
+
+                        <!-- Rename Report -->
+                        <div class="comment-box mb-4">
+                            <label for="custom_name" class="form-label"><strong>📋 Report Name</strong></label>
+                            <input type="text" id="custom_name" value="{{ custom_name }}" class="form-control mb-2">
+                            <button onclick="saveCustomName('{{ result_filename }}')" class="btn btn-primary w-100">Save Name</button>
+                            <div id="nameStatus" class="mt-2 text-center"></div>
+                        </div>
+
+                        <!-- Comments -->
+                        <div class="comment-box mb-4">
+                            <label for="comment" class="form-label"><strong>💬 Comments & Observations</strong></label>
+                            <textarea id="comment" class="form-control mb-2" placeholder="e.g., Location: Pipe elbow, Suspected cause: Moisture ingress, Action: Schedule repair" rows="3">{{ comments }}</textarea>
+                            <button onclick="saveComment('{{ result_filename }}')" class="btn btn-success w-100">Save Comment</button>
+                            <div id="commentStatus" class="mt-2 text-center"></div>
+                        </div>
+
+                        <!-- Feedback -->
+                        <div class="mt-4 p-3 bg-light rounded">
+                            <p><strong>Was this result correct?</strong></p>
+                            <a href="/confirm/{{ result_filename }}?correct=true" class="btn btn-success me-2">Yes, Correct</a>
+                            <a href="/confirm/{{ result_filename }}?correct=false" class="btn btn-danger">No, Incorrect</a>
+                        </div>
+
+                        <!-- Navigation -->
+                        <div class="mt-4">
+                            <a href="/" class="btn btn-outline-primary me-2">Upload Another</a>
+                            <a href="/reports" class="btn btn-secondary">📋 Reports</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="img-box">
-      <h3>AI Detection</h3>
-      <img src="{{ url_for('static', filename='results/' + result_filename) }}" alt="Detected">
-    </div>
-  </div>
 
-  <div class="result-text">
-    {{ result | safe }}
-  </div>
+    <script>
+        let canvas, ctx;
+        let isDrawing = false;
+        let drawMode = 'pen';
+        let lastX = 0;
+        let lastY = 0;
+        let history = [];
+        let historyStep = -1;
 
-  <a href="/">← Upload Another</a>
+        function initCanvas(img) {
+            canvas = document.getElementById('markupCanvas');
+            ctx = canvas.getContext('2d');
+
+            // Match canvas to image natural size
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+
+            // Match display size
+            canvas.style.width = 'auto';
+            canvas.style.height = 'auto';
+
+            // High-DPI support
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            if (dpr !== 1) {
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                canvas.width = Math.floor(rect.width * dpr);
+                canvas.height = Math.floor(rect.height * dpr);
+                ctx.scale(dpr, dpr);
+            }
+
+            // Save initial state
+            saveState();
+
+            // Load saved markup
+            const saved = localStorage.getItem('markup_{{ result_filename }}');
+            if (saved) {
+                const overlay = new Image();
+                overlay.onload = () => ctx.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+                overlay.src = saved;
+            }
+
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                return {
+                    x: (e.clientX - rect.left) * scaleX,
+                    y: (e.clientY - rect.top) * scaleY
+                };
+            }
+
+            canvas.addEventListener('mousedown', (e) => {
+                const pos = getMousePos(e);
+                isDrawing = true;
+                [lastX, lastY] = [pos.x, pos.y];
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDrawing) return;
+                const pos = getMousePos(e);
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.strokeStyle = drawMode === 'erase' ? 'white' : document.getElementById('penColor').value;
+                ctx.lineWidth = drawMode === 'erase' ? 20 : parseInt(document.getElementById('penSize').value);
+                ctx.lineCap = 'round';
+                ctx.globalCompositeOperation = drawMode === 'erase' ? 'destination-out' : 'source-over';
+                ctx.stroke();
+                [lastX, lastY] = [pos.x, pos.y];
+            });
+
+            ['mouseup', 'mouseout'].forEach(event => {
+                canvas.addEventListener(event, () => {
+                    if (isDrawing) {
+                        isDrawing = false;
+                        saveState();
+                    }
+                });
+            });
+        }
+
+        function setDrawMode(mode) {
+            drawMode = mode;
+        }
+
+        function saveState() {
+            if (historyStep < history.length - 1) {
+                history = history.slice(0, historyStep + 1);
+            }
+            try {
+                history.push(canvas.toDataURL());
+                historyStep = history.length - 1;
+            } catch (e) {
+                console.error("Failed to save canvas state", e);
+            }
+        }
+
+        function undo() {
+            if (historyStep > 0) {
+                historyStep--;
+                const img = new Image();
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+                img.src = history[historyStep];
+            }
+        }
+
+        function redo() {
+            if (historyStep < history.length - 1) {
+                historyStep++;
+                const img = new Image();
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+                img.src = history[historyStep];
+            }
+        }
+
+        function exportMarked() {
+            const original = new Image();
+            original.crossOrigin = "Anonymous";
+            original.src = "/static/uploads/{{ filename }}";
+
+            original.onload = () => {
+                const exportCanvas = document.createElement('canvas');
+                const ctx = exportCanvas.getContext('2d');
+                exportCanvas.width = original.naturalWidth;
+                exportCanvas.height = original.naturalHeight;
+
+                // Draw original image
+                ctx.drawImage(original, 0, 0);
+
+                // Draw markup on top
+                const markup = new Image();
+                markup.onload = () => {
+                    ctx.drawImage(markup, 0, 0, exportCanvas.width, exportCanvas.height);
+                    // Trigger download
+                    const link = document.createElement('a');
+                    link.download = `marked_${Date.now()}.png`;
+                    link.href = exportCanvas.toDataURL('image/png');
+                    link.click();
+                };
+                markup.src = canvas.toDataURL('image/png');
+            };
+
+            original.onerror = () => {
+                alert("❌ Cannot export: image blocked by CORS. Try saving markup instead.");
+            };
+        }
+
+        function saveCustomName(resultFilename) {
+            const val = document.getElementById('custom_name').value;
+            fetch('/rename_report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ result_image: resultFilename, custom_name: val })
+            })
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('nameStatus').innerHTML = d.success ? '<span class="text-success">✅ Name saved!</span>' : '<span class="text-danger">❌ Save failed</span>';
+            });
+        }
+
+        function saveComment(resultFilename) {
+            const val = document.getElementById('comment').value;
+            fetch('/save_comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ result_image: resultFilename, comment: val })
+            })
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('commentStatus').innerHTML = d.success ? '<span class="text-success">✅ Comment saved!</span>' : '<span class="text-danger">❌ Save failed</span>';
+            });
+        }
+
+        // Update size display
+        document.getElementById('penSize').addEventListener('input', function() {
+            document.getElementById('sizeValue').textContent = this.value + 'px';
+        });
+    </script>
 </body>
 </html>
